@@ -1,13 +1,10 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "APP DETAIL" : {
-
-    },
-    "App Fair" : {
-
-    },
     "Apps" : {
+
+    },
+    "Net Skip" : {
 
     },
     "Option" : {
@@ -16,7 +13,10 @@
     "Settings" : {
 
     },
-    "Welcome to the App Fair!" : {
+    "URL or search" : {
+
+    },
+    "Welcome to Net Skip!" : {
 
     }
   },
