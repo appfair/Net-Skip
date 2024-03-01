@@ -3,8 +3,9 @@
 // as published by the Free Software Foundation https://fsf.org
 
 import SwiftUI
+import SkipWeb
 
-@available(iOS 17.2, *)
+@available(iOS 17, macOS 14.0, *)
 public struct ContentView: View {
     @AppStorage("setting") var setting = true
 
@@ -13,7 +14,7 @@ public struct ContentView: View {
 
     public var body: some View {
         TabView {
-            AppList()
+            BrowserView()
                 .tabItem { Label("Apps", systemImage: "list.bullet") }
 
             VStack {
@@ -34,41 +35,30 @@ public struct ContentView: View {
     }
 }
 
-@available(iOS 17.2, *)
-public struct AppList: View {
-    @State var viewModel = ViewModel()
+@available(iOS 17, macOS 14.0, *)
+public struct BrowserView: View {
+    @State var viewModel = ViewModel(url: "about:blank")
 
     public init() {
     }
 
     public var body: some View {
-        NavigationStack {
-        }
-        .task {
-        }
-    }
-
-    @ViewBuilder func appDetailView(id: String) -> some View {
         VStack {
-            Text("APP DETAIL")
+            WebView(url: URL(string: "about:blank")!)
+            TextField(text: $viewModel.url) {
+                Text("URL or search")
+            }
+            .font(.title)
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
         }
     }
 }
 
-
-/// Defines a model that obtains a list of managed apps.
-@Observable public final class ViewModel {
-//    @Published var content: [ManagedApp] = []
-//    @Published var error: Error? = nil
-//
-//    @MainActor func getApps() async {
-//        do {
-//            for try await result in ManagedNetSkipModel.currentDistributor.availableApps {
-//                self.content = try result.get()
-//            }
-//        } catch {
-//            self.error = error
-//        }
-//    }
+@available(iOS 17.0, macOS 14.0, *)
+@Observable class ViewModel {
+    var url = ""
+    init(url: String) {
+        self.url = url
+    }
 }
-
