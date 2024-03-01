@@ -37,14 +37,14 @@ public struct ContentView: View {
 
 @available(iOS 17, macOS 14.0, *)
 public struct BrowserView: View {
-    @State var viewModel = ViewModel(url: "about:blank")
+    @State var viewModel = ViewModel(url: "https://search.inetol.net/")
 
     public init() {
     }
 
     public var body: some View {
         VStack {
-            WebView(url: URL(string: "about:blank")!)
+            WebView(url: URL(string: "https://search.inetol.net/")!)
             TextField(text: $viewModel.url) {
                 Text("URL or search")
             }
