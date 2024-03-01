@@ -50,7 +50,11 @@ public struct BrowserView: View {
             }
             .font(.title)
             .autocorrectionDisabled()
+            #if !SKIP
+            #if os(iOS)
             .textInputAutocapitalization(.never)
+            #endif
+            #endif
         }
     }
 }
