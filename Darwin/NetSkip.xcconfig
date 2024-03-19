@@ -1,5 +1,8 @@
 #include "../Skip.env"
 
+// this overrides the "PRODUCT_BUNDLE_IDENTIFIER = org.appfair.app.NetSkip" in Skip.env
+PRODUCT_BUNDLE_IDENTIFIER = org.appfair.app.Net-Skip
+
 // Set the action that will be executed as part of the Xcode Run Script phase
 // Setting to "launch" will build and run the app in the first open Android emulator or device
 // Setting to "build" will just run gradle build, but will no launc the app
@@ -23,7 +26,7 @@ INFOPLIST_KEY_UIStatusBarStyle[sdk=iphone*] = UIStatusBarStyleDefault
 INFOPLIST_KEY_UISupportedInterfaceOrientations[sdk=iphone*] = UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown
 
 IPHONEOS_DEPLOYMENT_TARGET = 16.0
-MACOSX_DEPLOYMENT_TARGET = 13.0
+MACOSX_DEPLOYMENT_TARGET = 14.0
 
 // the name of the product module; this can be anything, but cannot conflict with any Swift module names
 PRODUCT_MODULE_NAME = $(PRODUCT_NAME:c99extidentifier)App
