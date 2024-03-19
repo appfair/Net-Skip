@@ -20,8 +20,8 @@ let package = Package(
         .package(url: "https://source.skip.tools/skip-model.git", from: "0.5.4"),
         .package(url: "https://source.skip.tools/skip-sql.git", from: "0.6.1"),
         .package(url: "https://source.skip.tools/skip-script.git", from: "0.4.1"),
-        .package(url: "https://source.skip.tools/skip-xml.git", from: "0.1.2"),
-        .package(url: "https://source.skip.tools/skip-zip.git", from: "0.3.0"),
+//        .package(url: "https://source.skip.tools/skip-xml.git", from: "0.1.2"),
+//        .package(url: "https://source.skip.tools/skip-zip.git", from: "0.3.0"),
     ],
     targets: [
         .target(name: "NetSkip", dependencies: [
@@ -39,8 +39,8 @@ let package = Package(
             .product(name: "SkipModel", package: "skip-model"),
             .product(name: "SkipSQL", package: "skip-sql"),
             .product(name: "SkipScript", package: "skip-script"),
-            .product(name: "SkipXML", package: "skip-xml"),
-            .product(name: "SkipZip", package: "skip-zip"),
+//            .product(name: "SkipXML", package: "skip-xml"),
+//            .product(name: "SkipZip", package: "skip-zip"),
         ], resources: [.process("Resources")], plugins: [.plugin(name: "skipstone", package: "skip")]),
         .testTarget(name: "NetSkipModelTests", dependencies: [
             "NetSkipModel",
