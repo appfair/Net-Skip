@@ -5,64 +5,20 @@
 import SwiftUI
 import SkipWeb
 
-@available(iOS 17, macOS 14.0, *)
 public struct ContentView: View {
     @AppStorage("setting") var setting = true
-
+    let config = WebEngineConfiguration(javaScriptEnabled: true)
+    
     public init() {
     }
 
     public var body: some View {
-        TabView {
-            BrowserView()
-                .tabItem { Label("Apps", systemImage: "list.bullet") }
-
-            VStack {
-                Text("Welcome to Net Skip!")
-                Image(systemName: "heart.fill")
-                    .foregroundColor(.red)
-            }
-            .font(.largeTitle)
-            .tabItem { Label("Net Skip", systemImage: "house.fill") }
-
-            Form {
-                Text("Settings")
-                    .font(.largeTitle)
-                Toggle("Option", isOn: $setting)
-            }
-            .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+        NavigationStack {
+            BrowserView(configuration: config)
+                #if SKIP
+                // eliminate blank space on Android: https://github.com/skiptools/skip/issues/99#issuecomment-2010650774
+                .toolbar(.hidden, for: .navigationBar)
+                #endif
         }
-    }
-}
-
-@available(iOS 17, macOS 14.0, *)
-public struct BrowserView: View {
-    @State var viewModel = ViewModel(url: "https://search.inetol.net/")
-
-    public init() {
-    }
-
-    public var body: some View {
-        VStack {
-            WebView(url: URL(string: "https://search.inetol.net/")!)
-            TextField(text: $viewModel.url) {
-                Text("URL or search")
-            }
-            .font(.title)
-            .autocorrectionDisabled()
-            #if !SKIP
-            #if os(iOS)
-            .textInputAutocapitalization(.never)
-            #endif
-            #endif
-        }
-    }
-}
-
-@available(iOS 17.0, macOS 14.0, *)
-@Observable class ViewModel {
-    var url = ""
-    init(url: String) {
-        self.url = url
     }
 }
