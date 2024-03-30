@@ -1,8 +1,5 @@
 #include "../Skip.env"
 
-// this overrides the "PRODUCT_BUNDLE_IDENTIFIER = org.appfair.app.NetSkip" in Skip.env
-PRODUCT_BUNDLE_IDENTIFIER = org.appfair.app.Net-Skip
-
 // Set the action that will be executed as part of the Xcode Run Script phase
 // Setting to "launch" will build and run the app in the first open Android emulator or device
 // Setting to "build" will just run gradle build, but will no launc the app
@@ -15,8 +12,8 @@ ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor
 GENERATE_INFOPLIST_FILE = YES
 
 // The user-visible name of the app (localizable)
-INFOPLIST_KEY_CFBundleDisplayName = The App Fair
-INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.utilities
+INFOPLIST_KEY_CFBundleDisplayName = Net Skip
+INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.productivity
 
 // iOS-specific Info.plist property keys
 INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphone*] = YES
