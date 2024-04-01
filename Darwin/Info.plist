@@ -8,19 +8,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
-			<string>HTTPS</string>
+			<string>Web site URL</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>https</string>
-			</array>
-		</dict>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>CFBundleURLName</key>
-			<string>HTTP</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
 				<string>http</string>
 			</array>
 		</dict>
@@ -28,7 +19,17 @@
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
-			<string>NetSkip</string>
+			<string>File URL</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>file</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>Local file URL</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>netskip</string>
