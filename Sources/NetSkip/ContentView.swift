@@ -14,11 +14,13 @@ public struct ContentView: View {
 
     public var body: some View {
         NavigationStack {
+            #if SKIP || os(iOS)
             WebBrowser(configuration: config)
                 #if SKIP
                 // eliminate blank space on Android: https://github.com/skiptools/skip/issues/99#issuecomment-2010650774
                 .toolbar(.hidden, for: .navigationBar)
                 #endif
+            #endif
         }
     }
 }
