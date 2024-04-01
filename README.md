@@ -1,7 +1,6 @@
-# NetSkip
+# Net Skip
 
-This is a free [Skip](https://skip.tools) dual-platform app project.
-It builds a native app for both iOS and Android.
+Net Skip is a web browser app for iOS and Android.
 
 ## Building
 
