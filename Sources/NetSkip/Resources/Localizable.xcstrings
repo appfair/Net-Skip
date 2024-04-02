@@ -1,7 +1,48 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-
+    "Baidu" : {
+      "comment" : "search engine name for baidu"
+    },
+    "Bing" : {
+      "comment" : "search engine name for Bing"
+    },
+    "Dogpile" : {
+      "comment" : "search engine name for Dogpile"
+    },
+    "DuckDuckGo" : {
+      "comment" : "search engine name for DuckDuckGo"
+    },
+    "Ecosia" : {
+      "comment" : "search engine name for Ecosia"
+    },
+    "GigaBlast" : {
+      "comment" : "search engine name for GigaBlast"
+    },
+    "Google" : {
+      "comment" : "search engine name for Google"
+    },
+    "Qwant" : {
+      "comment" : "search engine name for Qwant"
+    },
+    "Searx" : {
+      "comment" : "search engine name for Searx"
+    },
+    "StartPage" : {
+      "comment" : "search engine name for StartPage"
+    },
+    "Swisscows" : {
+      "comment" : "search engine name for Swisscows"
+    },
+    "XXX" : {
+      "comment" : "search engine name for XXX"
+    },
+    "Yahoo!" : {
+      "comment" : "search engine name for Yahoo"
+    },
+    "Yandex" : {
+      "comment" : "search engine name for Yandex"
+    }
   },
   "version" : "1.0"
 }
