@@ -37,6 +37,7 @@ let package = Package(
         .target(name: "NetSkipModel", dependencies: [
             .product(name: "SkipFoundation", package: "skip-foundation"),
             .product(name: "SkipModel", package: "skip-model"),
+            .product(name: "SkipWeb", package: "skip-web"),
             .product(name: "SkipSQL", package: "skip-sql"),
             .product(name: "SkipScript", package: "skip-script"),
 //            .product(name: "SkipXML", package: "skip-xml"),
@@ -44,6 +45,7 @@ let package = Package(
         ], resources: [.process("Resources")], plugins: [.plugin(name: "skipstone", package: "skip")]),
         .testTarget(name: "NetSkipModelTests", dependencies: [
             "NetSkipModel",
+            .product(name: "SkipTest", package: "skip")
         ], resources: [.process("Resources")], plugins: [.plugin(name: "skipstone", package: "skip")]),
     ]
 )
