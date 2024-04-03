@@ -45,7 +45,7 @@ public struct ContentView: View {
 
 
 extension SearchEngine {
-    public static let swisscows = SearchEngine(id: "swisscows", name: {
+    public static let swisscows = SearchEngine(id: "swisscows", homeURL: "https://swisscows.com/", name: {
         NSLocalizedString("Swisscows", bundle: .module, comment: "search engine name for Swisscows")
     }) { q, l in
         "https://swisscows.com/web?query=\(q)"
@@ -56,7 +56,7 @@ extension SearchEngine {
 }
 
 extension SearchEngine {
-    public static let duckduckgo = SearchEngine(id: "duckduckgo", name: {
+    public static let duckduckgo = SearchEngine(id: "duckduckgo", homeURL: "https://duckduckgo.com/", name: {
         NSLocalizedString("DuckDuckGo", bundle: .module, comment: "search engine name for DuckDuckGo")
     }) { q, l in
         "https://duckduckgo.com/?q=\(q)"
@@ -66,7 +66,7 @@ extension SearchEngine {
 }
 
 extension SearchEngine {
-    public static let google = SearchEngine(id: "google", name: {
+    public static let google = SearchEngine(id: "google", homeURL: "https://www.google.com/", name: {
         NSLocalizedString("Google", bundle: .module, comment: "search engine name for Google")
     }) { q, l in
         "https://www.google.com/search?q=\(q)"
@@ -76,7 +76,7 @@ extension SearchEngine {
 }
 
 extension SearchEngine {
-    public static let bing = SearchEngine(id: "bing", name: {
+    public static let bing = SearchEngine(id: "bing", homeURL: "https://www.bing.com/", name: {
         NSLocalizedString("Bing", bundle: .module, comment: "search engine name for Bing")
     }) { q, l in
         "https://www.bing.com/search?q=\(q)"
@@ -87,7 +87,7 @@ extension SearchEngine {
 }
 
 extension SearchEngine {
-    public static let yahoo = SearchEngine(id: "yahoo", name: {
+    public static let yahoo = SearchEngine(id: "yahoo", homeURL: "https://search.yahoo.com/", name: {
         NSLocalizedString("Yahoo!", bundle: .module, comment: "search engine name for Yahoo")
     }) { q, l in
         "https://search.yahoo.com/search?p=\(q)"
@@ -97,7 +97,7 @@ extension SearchEngine {
 }
 
 extension SearchEngine {
-    public static let yandex = SearchEngine(id: "yandex", name: {
+    public static let yandex = SearchEngine(id: "yandex", homeURL: "https://yandex.com/", name: {
         NSLocalizedString("Yandex", bundle: .module, comment: "search engine name for Yandex")
     }) { q, l in
         "https://yandex.com/search/?text=\(q)"
@@ -107,7 +107,7 @@ extension SearchEngine {
 }
 
 extension SearchEngine {
-    public static let baidu = SearchEngine(id: "baidu", name: {
+    public static let baidu = SearchEngine(id: "baidu", homeURL: "http://www.baidu.com/", name: {
         NSLocalizedString("Baidu", bundle: .module, comment: "search engine name for baidu")
     }) { q, l in
         "http://www.baidu.com/s?wd=\(q)"
@@ -117,7 +117,7 @@ extension SearchEngine {
 }
 
 extension SearchEngine {
-    public static let ecosia = SearchEngine(id: "ecosia", name: {
+    public static let ecosia = SearchEngine(id: "ecosia", homeURL: "https://www.ecosia.org/", name: {
         NSLocalizedString("Ecosia", bundle: .module, comment: "search engine name for Ecosia")
     }) { q, l in
         "https://www.ecosia.org/search?q=\(q)"
@@ -127,7 +127,7 @@ extension SearchEngine {
 }
 
 extension SearchEngine {
-    public static let qwant = SearchEngine(id: "qwant", name: {
+    public static let qwant = SearchEngine(id: "qwant", homeURL: "https://www.qwant.com/", name: {
         NSLocalizedString("Qwant", bundle: .module, comment: "search engine name for Qwant")
     }) { q, l in
         "https://www.qwant.com/?q=\(q)"
@@ -138,7 +138,7 @@ extension SearchEngine {
 }
 
 extension SearchEngine {
-    public static let startpage = SearchEngine(id: "startpage", name: {
+    public static let startpage = SearchEngine(id: "startpage", homeURL: "https://www.startpage.com/", name: {
         NSLocalizedString("StartPage", bundle: .module, comment: "search engine name for StartPage")
     }) { q, l in
         "https://www.startpage.com/do/dsearch?query=\(q)"
@@ -148,7 +148,7 @@ extension SearchEngine {
 }
 
 extension SearchEngine {
-    public static let searx = SearchEngine(id: "searx", name: {
+    public static let searx = SearchEngine(id: "searx", homeURL: "https://searx.me/", name: {
         NSLocalizedString("Searx", bundle: .module, comment: "search engine name for Searx")
     }) { q, l in
         "https://searx.me/?q=\(q)"
@@ -158,7 +158,7 @@ extension SearchEngine {
 }
 
 extension SearchEngine {
-    public static let gigablast = SearchEngine(id: "gigablast", name: {
+    public static let gigablast = SearchEngine(id: "gigablast", homeURL: "https://www.gigablast.com/", name: {
         NSLocalizedString("GigaBlast", bundle: .module, comment: "search engine name for GigaBlast")
     }) { q, l in
         "https://www.gigablast.com/search?q=\(q)"
@@ -168,7 +168,7 @@ extension SearchEngine {
 }
 
 extension SearchEngine {
-    public static let dogpile = SearchEngine(id: "dogpile", name: {
+    public static let dogpile = SearchEngine(id: "dogpile", homeURL: "https://www.dogpile.com/", name: {
         NSLocalizedString("Dogpile", bundle: .module, comment: "search engine name for Dogpile")
     }) { q, l in
         "https://www.dogpile.com/serp?q=\(q)"
@@ -178,7 +178,7 @@ extension SearchEngine {
 }
 
 //extension SearchEngine {
-//    public static let XXX = SearchEngine(id: "XXX", name: {
+//    public static let XXX = SearchEngine(id: "XXX", homeURL: "XXX", name: {
 //        NSLocalizedString("XXX", bundle: .module, comment: "search engine name for XXX")
 //    }) { q, l in
 //        "XXX"
