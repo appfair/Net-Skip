@@ -1,14 +1,41 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "About %@" : {
+      "comment" : "settings title menu for about app"
+    },
+    "Appearance" : {
+      "comment" : "settings appearance picker label"
+    },
+    "Back" : {
+      "comment" : "back button label"
+    },
     "Baidu" : {
       "comment" : "search engine name for baidu"
     },
     "Bing" : {
       "comment" : "search engine name for Bing"
     },
+    "Block Ads" : {
+      "comment" : "settings toggle label for blocking ads"
+    },
+    "Clear History" : {
+      "comment" : "history page remove all sheet title"
+    },
+    "Close All" : {
+      "comment" : "active tabs remove all title"
+    },
+    "Close Tab" : {
+      "comment" : "more button string for closing a tab"
+    },
+    "Dark" : {
+      "comment" : "settings appearance system label"
+    },
     "Dogpile" : {
       "comment" : "search engine name for Dogpile"
+    },
+    "Done" : {
+      "comment" : "done button title"
     },
     "DuckDuckGo" : {
       "comment" : "search engine name for DuckDuckGo"
@@ -16,23 +43,92 @@
     "Ecosia" : {
       "comment" : "search engine name for Ecosia"
     },
+    "Enable JavaScript" : {
+      "comment" : "settings toggle label for enabling JavaScript"
+    },
+    "Favorite" : {
+      "comment" : "more button string for adding a favorite"
+    },
+    "Favorites" : {
+      "comment" : "favorites page list sheet title"
+    },
+    "Find on Page" : {
+      "comment" : "more button string for finding on the current page"
+    },
+    "Forward" : {
+      "comment" : "forward button label"
+    },
     "GigaBlast" : {
       "comment" : "search engine name for GigaBlast"
     },
     "Google" : {
       "comment" : "search engine name for Google"
     },
+    "Haptic Feedback" : {
+      "comment" : "settings toggle label for button haptic feedback"
+    },
+    "History" : {
+      "comment" : "more button string for opening the history"
+    },
+    "Home" : {
+      "comment" : "home button label"
+    },
+    "Kagi" : {
+      "comment" : "search engine name for Kagi"
+    },
+    "Light" : {
+      "comment" : "settings appearance system label"
+    },
+    "More" : {
+      "comment" : "more button label"
+    },
+    "Net Skip" : {
+      "comment" : "title screen headline"
+    },
+    "New Private Tab" : {
+      "comment" : "more button string for creating a new private tab"
+    },
+    "New Tab" : {
+      "comment" : "more button string for creating a new tab"
+    },
     "Qwant" : {
       "comment" : "search engine name for Qwant"
     },
+    "Reload" : {
+      "comment" : "more button string for reloading the current page"
+    },
+    "Remove all Favorites" : {
+      "comment" : "favorites page remove all sheet title"
+    },
+    "Search Engine" : {
+      "comment" : "settings picker label for the default search engine"
+    },
+    "Search Suggestions" : {
+      "comment" : "settings toggle label for previewing search suggestions"
+    },
     "Searx" : {
       "comment" : "search engine name for Searx"
+    },
+    "Settings" : {
+      "comment" : "more button string for opening the settings"
     },
     "StartPage" : {
       "comment" : "search engine name for StartPage"
     },
     "Swisscows" : {
       "comment" : "search engine name for Swisscows"
+    },
+    "System" : {
+      "comment" : "settings appearance system label"
+    },
+    "Tab List" : {
+      "comment" : "tab list action label"
+    },
+    "Tabs" : {
+      "comment" : "active tabs sheet title"
+    },
+    "URL or search" : {
+      "comment" : "placeholder string for URL bar"
     },
     "XXX" : {
       "comment" : "search engine name for XXX"
