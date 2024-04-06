@@ -12,10 +12,11 @@ let logger: Logger = Logger(subsystem: "net.skip", category: "NetSkipModel")
 
 
 extension PageInfo.PageType {
-    var tableName: String {
+    public var tableName: String {
         switch self {
         case .favorite: return "favorite"
         case .history: return "history"
+        case .active: return "active"
         }
     }
 }
@@ -28,11 +29,15 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
 
     public init(url: URL?) throws {
         self.ctx = try SQLContext(path: url?.path ?? ":memory:", flags: [.readWrite, .create], logLevel: .info) // , configuration: .plus)
+        try self.initializeSchema()
     }
 
-    public func saveItems(type: PageInfo.PageType, items: [PageInfo]) throws {
-        try initializeSchema()
+    public func saveItems(type: PageInfo.PageType, items: [PageInfo]) throws -> [PageInfo.ID] {
         let table = type.tableName
+
+        var ids: [PageInfo.ID] = []
+
+        let newID = PageInfo.ID(0)
 
         for item in items {
             logger.log("saveItem: \(table) \(item.id)")
@@ -42,7 +47,7 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
             let date = SQLValue.float(item.date.timeIntervalSince1970)
 
             let statement: SQLStatement
-            if item.id != Int64(0) { // id=0 means new record
+            if item.id != newID { // id=0 means new record
                 statement = try ctx.prepare(sql: "UPDATE \(table) SET url = ?, title = ?, date = ? WHERE id = ?")
             } else {
                 statement = try ctx.prepare(sql: "INSERT INTO \(table) (url, title, date) VALUES (?, ?, ?)")
@@ -51,17 +56,18 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
             try statement.bind(url, at: 1)
             try statement.bind(title, at: 2)
             try statement.bind(date, at: 3)
-            if item.id != Int64(0) {
+            if item.id != newID {
                 try statement.bind(SQLValue.integer(item.id), at: 4)
             }
 
             defer { do { try statement.close() } catch {} }
             try statement.update()
+            ids.append(item.id != newID ? item.id : ctx.lastInsertRowID)
         }
+        return ids
     }
 
     public func loadItems(type: PageInfo.PageType, ids: Set<PageInfo.ID>) throws -> [PageInfo] {
-        try initializeSchema()
         let table = type.tableName
         logger.log("loadItem: \(table) \(ids)")
 
@@ -89,7 +95,6 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
     }
 
     public func removeItems(type: PageInfo.PageType, ids: Set<PageInfo.ID>) throws {
-        try initializeSchema()
         let table = type.tableName
 
         let statement = try ids.isEmpty
@@ -101,16 +106,16 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
     }
 
     private func initializeSchema() throws {
+        /// The SQL for creating a PageInfo table
+        func createTableSQL(_ type: PageInfo.PageType) -> String {
+            "CREATE TABLE \(type.tableName) (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL, title TEXT, date FLOAT NOT NULL)"
+        }
+
+        // perform the additive migration from earlier schema versions
         var currentVersion = try currentSchemaVersion()
-        currentVersion = try migrateSchema(v: Int64(1), current: currentVersion, ddl: """
-        CREATE TABLE \(PageInfo.PageType.history.tableName) (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL, title TEXT, date FLOAT NOT NULL)
-        """)
-
-        currentVersion = try migrateSchema(v: Int64(2), current: currentVersion, ddl: """
-        CREATE TABLE \(PageInfo.PageType.favorite.tableName) (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL, title TEXT, date FLOAT NOT NULL)
-        """)
-
-        // Future column additions, etc here...
+        currentVersion = try migrateSchema(v: Int64(1), current: currentVersion, ddl: createTableSQL(.history))
+        currentVersion = try migrateSchema(v: Int64(2), current: currentVersion, ddl: createTableSQL(.favorite))
+        currentVersion = try migrateSchema(v: Int64(3), current: currentVersion, ddl: createTableSQL(.active))
     }
 
     private func currentSchemaVersion() throws -> Int64 {

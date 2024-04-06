@@ -6,22 +6,22 @@ import SwiftUI
 import SkipWeb
 import NetSkipModel
 
-
 public struct ContentView: View {
     static var defaultSearchEngines: [SearchEngine] = [
-        .google,
         .duckduckgo,
+        .swisscows,
+        .google,
         .bing,
         .yahoo,
         .yandex,
         .baidu,
         .ecosia,
         .qwant,
-        .swisscows,
         .startpage,
         .searx,
         .gigablast,
         .dogpile,
+        .kagi,
     ]
 
     let config = WebEngineConfiguration(javaScriptEnabled: true, searchEngines: Self.defaultSearchEngines)
@@ -33,16 +33,51 @@ public struct ContentView: View {
     public var body: some View {
         NavigationStack {
             #if SKIP || os(iOS)
-            WebBrowser(configuration: config, store: store)
+            BrowserTabView(configuration: config, store: store)
                 #if SKIP
                 // eliminate blank space on Android: https://github.com/skiptools/skip/issues/99#issuecomment-2010650774
                 .toolbar(.hidden, for: .navigationBar)
                 #endif
             #endif
         }
+        .task {
+            #if !SKIP
+
+            // Content blocker from a source like:
+            // https://raw.githubusercontent.com/brave/brave-core/master/ios/brave-ios/Sources/Brave/WebFilters/ContentBlocker/Lists/block-ads.json
+            if let ruleListStore = WebContentRuleListStore.default() {
+                for blockerID in [
+                    "block-ads",
+                ] {
+                    if let blockerURL = Bundle.module.url(forResource: blockerID, withExtension: "json") {
+                        logger.info("loading content blocker rules from: \(blockerURL)")
+                        do {
+                            let blockerContents = try String(contentsOf: blockerURL)
+                            let ruleList = try await ruleListStore.compileContentRuleList(forIdentifier: blockerID, encodedContentRuleList: blockerContents)
+                            let ids = await ruleListStore.availableIdentifiers()
+                            logger.info("loaded content blocker rule list: \(ruleList) ids=\(ids ?? [])")
+                            NotificationCenter.default.post(name: .webContentRulesLoaded, object: blockerID)
+                        } catch {
+                            logger.error("error loading content blocker rules from \(blockerURL): \(error)")
+                        }
+                    }
+                }
+            }
+            #endif
+        }
     }
 }
 
+
+extension SearchEngine {
+    public static let duckduckgo = SearchEngine(id: "duckduckgo", homeURL: "https://duckduckgo.com/", name: {
+        NSLocalizedString("DuckDuckGo", bundle: .module, comment: "search engine name for DuckDuckGo")
+    }) { q, l in
+        "https://duckduckgo.com/?q=\(q)"
+    } suggestionURL: { q, l in
+        "https://duckduckgo.com/ac/?q=\(q)&kl=\(l)"
+    }
+}
 
 extension SearchEngine {
     public static let swisscows = SearchEngine(id: "swisscows", homeURL: "https://swisscows.com/", name: {
@@ -52,16 +87,6 @@ extension SearchEngine {
     } suggestionURL: { q, l in
         // ["sailor moon","sailor","sailer verlag","sailfish","sailer"]
         "https://api.swisscows.com/suggest?query=\(q)&locale=\(l)" // &itemsCount=5
-    }
-}
-
-extension SearchEngine {
-    public static let duckduckgo = SearchEngine(id: "duckduckgo", homeURL: "https://duckduckgo.com/", name: {
-        NSLocalizedString("DuckDuckGo", bundle: .module, comment: "search engine name for DuckDuckGo")
-    }) { q, l in
-        "https://duckduckgo.com/?q=\(q)"
-    } suggestionURL: { q, l in
-        "https://duckduckgo.com/ac/?q=\(q)&kl=\(l)"
     }
 }
 
@@ -174,6 +199,16 @@ extension SearchEngine {
         "https://www.dogpile.com/serp?q=\(q)"
     } suggestionURL: { q, l in
         nil // "https://www.dogpile.com/serp/suggestions.js?qc=QUERY&_=1646097468734"
+    }
+}
+
+extension SearchEngine {
+    public static let kagi = SearchEngine(id: "kagi", homeURL: "https://kagi.com/", name: {
+        NSLocalizedString("Kagi", bundle: .module, comment: "search engine name for Kagi")
+    }) { q, l in
+        "https://kagi.com/search?q=\(q)"
+    } suggestionURL: { q, l in
+        "https://kagi.com/api/autosuggest?q=\(q)"
     }
 }
 
