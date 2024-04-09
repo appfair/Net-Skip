@@ -8,7 +8,7 @@ import PackageDescription
 let package = Package(
     name: "netskip-app",
     defaultLocalization: "en",
-    platforms: [.iOS(.v17), .macOS(.v14)],
+    platforms: [.iOS(.v17), .macOS(.v13)],
     products: [
         .library(name: "NetSkipApp", type: .dynamic, targets: ["NetSkip"]),
     ],
