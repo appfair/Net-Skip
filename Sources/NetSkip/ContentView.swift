@@ -7,24 +7,7 @@ import SkipWeb
 import NetSkipModel
 
 public struct ContentView: View {
-    static var defaultSearchEngines: [SearchEngine] = [
-        .duckduckgo,
-        .swisscows,
-        .google,
-        .bing,
-        .yahoo,
-        .yandex,
-        .baidu,
-        .ecosia,
-        .qwant,
-        .startpage,
-        .searx,
-        .gigablast,
-        .dogpile,
-        .kagi,
-    ]
-
-    let config = WebEngineConfiguration(javaScriptEnabled: true, searchEngines: Self.defaultSearchEngines)
+    let config = WebEngineConfiguration(javaScriptEnabled: true)
     let store = try! NetSkipWebBrowserStore(url: URL.documentsDirectory.appendingPathComponent("netskip.sqlite"))
 
     public init() {
@@ -68,6 +51,24 @@ public struct ContentView: View {
     }
 }
 
+extension SearchEngine {
+    static var defaultSearchEngines: [SearchEngine] = [
+        .duckduckgo,
+        .google,
+        .swisscows,
+        .bing,
+        .yahoo,
+        .ecosia,
+        .qwant,
+        .startpage,
+        .searx,
+        .yandex,
+        .baidu,
+        .gigablast,
+        .dogpile,
+        .kagi,
+    ]
+}
 
 extension SearchEngine {
     public static let duckduckgo = SearchEngine(id: "duckduckgo", homeURL: "https://duckduckgo.com/", name: {

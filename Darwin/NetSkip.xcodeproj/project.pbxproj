@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		49231BAC2AC5BCEF00F98ADF /* NetSkipApp in Frameworks */ = {isa = PBXBuildFile; productRef = 49231BAB2AC5BCEF00F98ADF /* NetSkipApp */; };
 		49231BAD2AC5BCEF00F98ADF /* NetSkipApp in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 49231BAB2AC5BCEF00F98ADF /* NetSkipApp */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		4950C4F42BBD835600CB5BA4 /* about in Resources */ = {isa = PBXBuildFile; fileRef = 4950C4F32BBD835600CB5BA4 /* about */; };
 		499CD43B2AC5B799001AE8D8 /* NetSkipAppMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49F90C2B2A52156200F06D93 /* NetSkipAppMain.swift */; };
 		499CD4402AC5B799001AE8D8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 49F90C2F2A52156300F06D93 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
@@ -31,7 +30,6 @@
 /* Begin PBXFileReference section */
 		492762D52B28A3A100ADF99B /* NetSkip.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NetSkip.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		493609562A6B7EAE00C401E2 /* NetSkip */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = NetSkip; path = ..; sourceTree = "<group>"; };
-		4950C4F32BBD835600CB5BA4 /* about */ = {isa = PBXFileReference; lastKnownFileType = folder; name = about; path = ../Sources/NetSkip/Resources/about; sourceTree = "<group>"; };
 		4950C4F62BC1903D00CB5BA4 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = fr; path = fr.lproj/Info.plist; sourceTree = "<group>"; };
 		4950C5162BC1925000CB5BA4 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Base; path = Base.lproj/Info.plist; sourceTree = "<group>"; };
 		496EB72F2A6AE4DE00C1253A /* Skip.env */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Skip.env; path = ../Skip.env; sourceTree = "<group>"; };
@@ -91,7 +89,6 @@
 				4950C4F72BC1903D00CB5BA4 /* Info.plist */,
 				49F90C2F2A52156300F06D93 /* Assets.xcassets */,
 				49F90C312A52156300F06D93 /* Entitlements.plist */,
-				4950C4F32BBD835600CB5BA4 /* about */,
 			);
 			name = App;
 			sourceTree = "<group>";
@@ -128,7 +125,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1430;
+				LastSwiftUpdateCheck = 1530;
 				LastUpgradeCheck = 1530;
 			};
 			buildConfigurationList = 49F90C232A52156200F06D93 /* Build configuration list for PBXProject "NetSkip" */;
@@ -187,7 +184,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				499CD4402AC5B799001AE8D8 /* Assets.xcassets in Resources */,
-				4950C4F42BBD835600CB5BA4 /* about in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

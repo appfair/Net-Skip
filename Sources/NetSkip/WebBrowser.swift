@@ -20,6 +20,7 @@ let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
     @State var showActiveTabs = false
     @State var showSettings = false
     @State var showHistory = false
+    @State var showFavorites = false
 
     @State var triggerImpact = false
     @State var triggerWarning = false
@@ -79,18 +80,43 @@ let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
         }
         .sheet(isPresented: $showHistory) {
             PageInfoList(type: PageInfo.PageType.history, store: store, onSelect: { pageInfo in
-                logger.info("select history: \(pageInfo.url)")
+                logger.info("select history: \(pageInfo.url?.absoluteString ?? "NONE")")
+                if let url = pageInfo.url {
+                    openURL(url: url, newTab: true)
+                }
             }, onDelete: { pageInfos in
-                logger.info("delete histories: \(pageInfos.map(\.url))")
+                //logger.info("delete histories: \(pageInfos.map(\.url))")
             })
+            #if !SKIP
+            .presentationDetents([.large])
+            #endif
+        }
+        .sheet(isPresented: $showFavorites) {
+            PageInfoList(type: PageInfo.PageType.favorite, store: store, onSelect: { pageInfo in
+                logger.info("select favorite: \(pageInfo.url?.absoluteString ?? "NONE")")
+                if let url = pageInfo.url {
+                    openURL(url: url, newTab: true)
+                }
+            }, onDelete: { pageInfos in
+                //logger.info("delete histories: \(pageInfos.map(\.url))")
+            })
+            #if !SKIP
+            .presentationDetents([.large])
+            #endif
         }
         .sheet(isPresented: $showActiveTabs) {
             PageInfoList(type: PageInfo.PageType.active, store: store, onSelect: { pageInfo in
-                logger.info("select tab: \(pageInfo.url)")
+                logger.info("select tab: \(pageInfo.url?.absoluteString ?? "NONE")")
+                withAnimation {
+                    self.selectedTab = pageInfo.id
+                }
             }, onDelete: { pageInfos in
-                logger.info("delete tabs: \(pageInfos.map(\.url))")
+                //logger.info("delete tabs: \(pageInfos.map(\.url))")
                 closeTabs(Set(pageInfos.map(\.id)))
             })
+            #if !SKIP
+            .presentationDetents([.medium, .large])
+            #endif
         }
         .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
     }
@@ -121,9 +147,14 @@ let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
         let activeTabs = trying { try store.loadItems(type: PageInfo.PageType.active, ids: []) }
 
         for activeTab in activeTabs ?? [] {
-            logger.log("restoring tab \(activeTab.id): \(activeTab.url) title=\(activeTab.title ?? "")")
+            logger.log("restoring tab \(activeTab.id): \(activeTab.url?.absoluteString ?? "NONE") title=\(activeTab.title ?? "")")
             let viewModel = newViewModel(activeTab)
             self.tabs.append(viewModel)
+        }
+
+        // always have at least one tab open
+        if self.tabs.isEmpty {
+            newTabAction()
         }
     }
 
@@ -144,8 +175,9 @@ let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
 
     func openURL(url: URL, newTab: Bool) {
         logger.log("openURL: \(url) newTab=\(newTab)")
-        if self.currentViewModel == nil || newTab == true {
-            newTabAction() // this will set the current tab
+        // if we have no open tabs, of if the current tab is not blank, then open it in a new URL
+        if self.currentViewModel == nil || (newTab == true && self.currentURL == nil) {
+            newTabAction(url: url) // this will set the current tab
         }
         var newURL = url
         // if the scheme netskip:// then change it to https://
@@ -169,6 +201,24 @@ let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
 
     var currentWebView: PlatformWebView? {
         currentNavigator?.webEngine?.webView
+    }
+
+    var currentURL: URL? {
+        if let url = currentState?.pageURL {
+            return url
+        }
+
+        if let url = currentWebView?.url {
+            #if SKIP
+            // returns a String on Android
+            // https://developer.android.com/reference/android/webkit/WebView#getUrl()
+            return URL(string: url)
+            #else
+            return url
+            #endif
+        }
+
+        return nil
     }
 
     func toolbarButton1() -> some View {
@@ -272,7 +322,7 @@ let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
             }
             .accessibilityIdentifier("menu.button.newprivatetab")
 
-            Button(action: newTabAction) {
+            Button(action: { newTabAction() }) {
                 Label {
                     Text("New Tab", bundle: .module, comment: "more button string for creating a new tab")
                 } icon: {
@@ -338,15 +388,16 @@ let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
 
     /// The currently-selected search engine, or the first search engine in the list if it is unselected
     var currentSearchEngine: SearchEngine? {
-        configuration.searchEngines.first { engine in
+        SearchEngine.defaultSearchEngines.first { engine in
             engine.id == self.searchEngine
-        } ?? configuration.searchEngines.first
+        } ?? SearchEngine.defaultSearchEngines.first
     }
 
     /// The home page URL, which default to the current search engine's home page
     var homeURL: URL? {
-        if let homePage = URL(string: currentSearchEngine?.homeURL ?? "https://example.org") {
-            return homePage
+        if let homePage = currentSearchEngine?.homeURL,
+           let homePageURL = URL(string: homePage) {
+            return homePageURL
         } else {
             return nil
         }
@@ -422,6 +473,11 @@ let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
             // remove the pages from the tab list
             try? store.removeItems(type: .active, ids: ids)
             self.selectedTab = self.tabs.last?.id ?? self.selectedTab
+
+            // always leave behind a single tab
+            if self.tabs.isEmpty {
+                newTabAction()
+            }
         }
         logTabs()
     }
@@ -436,20 +492,18 @@ let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
         #endif
     }
 
-    func newTabAction() {
+    func newTabAction(url: URL? = nil) {
         logger.info("newTabAction")
         hapticFeedback()
-        self.tabs.append(newViewModel(PageInfo(url: homeURL ?? fallbackURL)))
+        //let info = PageInfo(url: homeURL ?? fallbackURL)
+        let info = PageInfo(url: url) // open to a blank page
+        self.tabs.append(newViewModel(info))
         self.selectedTab = self.tabs.last?.id ?? self.selectedTab
         logTabs()
     }
 
     func logTabs() {
-        #if !SKIP
-        logger.info("selected=\(selectedTab) count=\(self.tabs.count) tabs=\(self.tabs.map(\.navigator.webEngine?.webView.url))")
-        #else
-        logger.info("selected=\(selectedTab) count=\(self.tabs.count)") // cannot traverse nullable key path
-        #endif
+        logger.info("selected=\(selectedTab) count=\(self.tabs.count)") //  tabs=\(self.tabs.flatMap(\.navigator.webEngine?.webView.url))")
     }
 
     func newPrivateTabAction() {
@@ -467,10 +521,10 @@ let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
     func favoriteAction() {
         logger.info("favoriteAction")
         hapticFeedback()
-        if let url = currentState?.pageURL, let title = currentState?.pageTitle {
-            logger.info("addPageToFavorite: \(title) \(url.absoluteString)")
+        if let url = self.currentURL {
+            logger.info("addPageToFavorite: \(url.absoluteString)")
             trying {
-                _ = try store.saveItems(type: .favorite, items: [PageInfo(url: url, title: title)])
+                _ = try store.saveItems(type: .favorite, items: [PageInfo(url: url, title: currentState?.pageTitle ?? currentWebView?.title)])
             }
         }
     }
@@ -481,6 +535,12 @@ let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
         showHistory = true
     }
 
+    func favoritesAction() {
+        logger.info("favoritesAction")
+        hapticFeedback()
+        showFavorites = true
+    }
+
     func settingsAction() {
         logger.info("settingsAction")
         hapticFeedback()
@@ -489,7 +549,7 @@ let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
 
     func moreButton() -> some View {
         Menu {
-            Button(action: newTabAction) {
+            Button(action: { newTabAction() }) {
                 Label {
                     Text("New Tab", bundle: .module, comment: "more button string for creating a new tab")
                 } icon: {
@@ -559,12 +619,22 @@ let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
                 Label {
                     Text("Favorite", bundle: .module, comment: "more button string for adding a favorite")
                 } icon: {
+                    // TODO: make star.filled when it is already a favorite
                     Image(systemName: "star")
                 }
             }
             .accessibilityIdentifier("button.favorite")
 
             Divider()
+
+            Button(action: favoritesAction) {
+                Label {
+                    Text("Favorites", bundle: .module, comment: "more button string for opening the favorites list")
+                } icon: {
+                    Image(systemName: "list.star")
+                }
+            }
+            .accessibilityIdentifier("button.favorites")
 
             Button(action: historyAction) {
                 Label {
@@ -746,7 +816,7 @@ struct TitleView : View {
     @ViewBuilder func URLBarComponent() -> some View {
         ZStack {
             TextField(text: $viewModel.urlTextField) {
-                Text("URL or search", bundle: .module, comment: "placeholder string for URL bar")
+                Text("Search or enter website name", bundle: .module, comment: "placeholder string for URL bar")
             }
             .textFieldStyle(.roundedBorder)
             //.font(Font.body)
@@ -826,7 +896,7 @@ struct SettingsView : View {
 
                 Section {
                     Picker(selection: $searchEngine) {
-                        ForEach(configuration.searchEngines, id: \.id) { engine in
+                        ForEach(SearchEngine.defaultSearchEngines, id: \.id) { engine in
                             Text(verbatim: engine.name())
                                 .tag(engine.id)
                         }
@@ -852,7 +922,7 @@ struct SettingsView : View {
 
                 Section {
                     // FIXME: should not need to explicitly specify Base.lproj; it should load as a fallback language automatically
-                    let aboutURL = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "about")
+                    let aboutURL = Bundle.main.url(forResource: "about", withExtension: "html")
                     if let aboutPage = aboutURL {
                         #if !SKIP
                         // FIXME: need Skip support for localizedInfoDictionary / infoDictionary
@@ -902,77 +972,95 @@ struct PageInfoList : View {
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(items) { item in
-                    Button(action: {
-                        dismiss()
-                        onSelect(item)
-                    }, label: {
-                        VStack(alignment: .leading) {
-                            Text(item.title ?? "")
-                                .font(.title2)
-                                .lineLimit(1)
-                            #if !SKIP
-                            // SKIP TODO: formatted
-                            Text(item.date.formatted())
-                                .font(.body)
-                                .lineLimit(1)
-                            #endif
-                            Text(item.url.absoluteString)
-                                .font(.caption)
-                                .foregroundStyle(Color.gray)
-                                .lineLimit(1)
+            if items.isEmpty {
+                Text("No Items", bundle: .module, comment: "sheet placeholder text when there are no items available")
+                    .font(.title)
+                    .opacity(0.8)
+            } else {
+                List {
+                    ForEach(items) { item in
+                        Button(action: {
+                            dismiss()
+                            onSelect(item)
+                        }, label: {
+                            VStack(alignment: .leading) {
+                                itemTitle(item: item)
+                                    .font(.title2)
+                                    .lineLimit(1)
                                 #if !SKIP
-                                .truncationMode(.middle)
+                                // SKIP TODO: formatted
+                                Text(item.date.formatted())
+                                    .font(.body)
+                                    .lineLimit(1)
                                 #endif
-                        }
-                    })
-                    .buttonStyle(.plain)
-                }
-                .onDelete { offsets in
-                    let deleteItems = offsets.map({
-                        items[$0]
-                    })
-                    let ids = deleteItems.map(\.id)
-                    logger.log("deleting \(type.tableName) items: \(ids)")
-                    trying {
-                        try store.removeItems(type: type, ids: Set(ids))
+                                Text(item.url?.absoluteString ?? "")
+                                    .font(.caption)
+                                    .foregroundStyle(Color.gray)
+                                    .lineLimit(1)
+                                    #if !SKIP
+                                    .truncationMode(.middle)
+                                    #endif
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            #if !SKIP
+                            .contentShape(Rectangle()) // needed to make the tap target fill the area
+                            #endif
+                        })
+                        .buttonStyle(.plain)
                     }
-                    onDelete(deleteItems)
-                    reloadPageInfo()
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    Button {
-                        self.dismiss()
-                    } label: {
-                        Text("Done", bundle: .module, comment: "done button title")
-                            .bold()
-                    }
-                    .buttonStyle(.plain)
-                }
-                ToolbarItem(placement: .bottomBar) {
-                    Button {
-                        logger.log("clearing \(type.tableName)")
+                    .onDelete { offsets in
+                        let deleteItems = offsets.map({
+                            items[$0]
+                        })
+                        let ids = deleteItems.map(\.id)
+                        logger.log("deleting \(type.tableName) items: \(ids)")
                         trying {
-                            try store.removeItems(type: type, ids: [])
-                            onDelete(items)
-                            reloadPageInfo()
+                            try store.removeItems(type: type, ids: Set(ids))
                         }
-                        dismiss()
-                    } label: {
-                        type.clearTitle.bold()
+                        onDelete(deleteItems)
+                        reloadPageInfo()
                     }
-                    .buttonStyle(.plain)
-                    .disabled(items.isEmpty)
                 }
+                .toolbar {
+                    ToolbarItem(placement: .automatic) {
+                        Button {
+                            self.dismiss()
+                        } label: {
+                            Text("Done", bundle: .module, comment: "done button title")
+                                .bold()
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    ToolbarItem(placement: .bottomBar) {
+                        Button {
+                            logger.log("clearing \(type.tableName)")
+                            trying {
+                                try store.removeItems(type: type, ids: [])
+                                onDelete(items)
+                                reloadPageInfo()
+                            }
+                            dismiss()
+                        } label: {
+                            type.clearTitle.bold()
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(items.isEmpty)
+                    }
+                }
+                .navigationTitle(type.navigationTitle)
+                .navigationBarTitleDisplayMode(.inline)
             }
-            .navigationTitle(type.navigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
         }
         .onAppear {
             reloadPageInfo()
+        }
+    }
+
+    func itemTitle(item: PageInfo) -> some View {
+        if let title = item.title {
+            return Text(title)
+        } else {
+            return Text("Empty Page", bundle: .module, comment: "item list title for a page with no title")
         }
     }
 

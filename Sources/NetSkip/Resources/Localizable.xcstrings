@@ -43,6 +43,9 @@
     "Ecosia" : {
       "comment" : "search engine name for Ecosia"
     },
+    "Empty Page" : {
+      "comment" : "item list title for a page with no title"
+    },
     "Enable JavaScript" : {
       "comment" : "settings toggle label for enabling JavaScript"
     },
@@ -50,7 +53,7 @@
       "comment" : "more button string for adding a favorite"
     },
     "Favorites" : {
-      "comment" : "favorites page list sheet title"
+      "comment" : "more button string for opening the favorites list"
     },
     "Find on Page" : {
       "comment" : "more button string for finding on the current page"
@@ -91,6 +94,9 @@
     "New Tab" : {
       "comment" : "more button string for creating a new tab"
     },
+    "No Items" : {
+      "comment" : "sheet placeholder text when there are no items available"
+    },
     "Qwant" : {
       "comment" : "search engine name for Qwant"
     },
@@ -102,6 +108,179 @@
     },
     "Search Engine" : {
       "comment" : "settings picker label for the default search engine"
+    },
+    "Search or enter website name" : {
+      "comment" : "placeholder string for URL bar",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البحث أو ادخل اسم الموقع"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca o introdueix el nom del lloc web"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vyhledat nebo zadejte název webu"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Søg eller indtast website-navn"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suchen oder Website-Name eingeben"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αναζήτηση ή εισαγωγή ονόματος ιστότοπου"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar o ingresar el nombre del sitio web"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Etsi tai syötä verkkosivun nimi"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher ou saisir le nom du site web"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pretraži ili upiši naziv web mjesta"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keressen vagy adja meg a weboldal nevét"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cari atau masukkan nama situs web"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca o inserisci il nome del sito web"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サイト名を検索または入力"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "검색하거나 웹사이트 이름을 입력하세요"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Søk eller skriv inn nettstednavn"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoek of voer de website-naam in"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wyszukaj lub wprowadź nazwę witryny"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pesquisar ou digitar o nome do site"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Căutați sau introduceți numele site-ului web"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поиск или ввод названия сайта"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vyhľadať alebo zadať názov webu"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sök eller ange webbplatsnamn"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ค้นหาหรือป้อนชื่อเว็บไซต์"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ara veya web sitesi adını girin"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Шукайте або вводить назву вебсайту"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tìm kiếm hoặc nhập tên trang web"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索或输入网站名称"
+          }
+        }
+      }
     },
     "Search Suggestions" : {
       "comment" : "settings toggle label for previewing search suggestions"
@@ -126,9 +305,6 @@
     },
     "Tabs" : {
       "comment" : "active tabs sheet title"
-    },
-    "URL or search" : {
-      "comment" : "placeholder string for URL bar"
     },
     "XXX" : {
       "comment" : "search engine name for XXX"
