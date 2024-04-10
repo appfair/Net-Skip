@@ -1,0 +1,7 @@
+
+#default_language "en-US"
+
+automatic_release true
+
+copyright "#{Time.now.year} Net Skip"
+

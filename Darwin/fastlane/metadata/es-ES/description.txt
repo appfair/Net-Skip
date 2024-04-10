@@ -1,0 +1,14 @@
+Net Skip es el navegador web gratuito y de código abierto de App Fair. Ofrece una experiencia de navegación minimalista y elegante, lo que resulta en la experiencia de navegación web más rápida disponible en cualquier dispositivo móvil, en cualquier lugar.
+
+A diferencia de la mayoría de los otros navegadores en el mercado, Net Skip se caracteriza mejor por lo que no incluye:
+
+• No hay publicidad ni rastreo incrustados
+• No hay características de criptomoneda
+• No hay programas de recompensas
+• No hay compras ni suscripciones dentro de la aplicación
+• No hay telemetría, análisis ni recopilación de datos de usuario
+• No hay monetización en absoluto del usuario de la aplicación
+
+El código fuente de Net Skip, junto con todos los proyectos de App Fair, es gratuito y de código abierto, y se distribuye bajo la Licencia Pública General GNU (GPL) 3.0. Puedes acceder al código fuente para su revisión y modificación en https://github.com/Net-Skip/netskip-app/. Utiliza el motor de renderizado WebKit, que se distribuye bajo la Licencia Pública General Menor GNU (LGPL) y cuyo código fuente está disponible en https://webkit.org/.
+
+Net Skip forma parte del Proyecto App Fair, una organización benéfica sin ánimo de lucro con sede en la Mancomunidad de Massachusetts fundada para crear y mantener bienes públicos digitales en forma de aplicaciones móviles. Obtén más información sobre el Proyecto App Fair en https://appfair.org y ayúdanos a construir nuestro mercado de aplicaciones difundiendo la palabra sobre Net Skip y nuestras otras aplicaciones de proyecto.
