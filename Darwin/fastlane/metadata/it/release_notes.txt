@@ -1,0 +1,2 @@
+Molte correzioni di bug e miglioramenti delle prestazioni.
+

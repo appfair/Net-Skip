@@ -38,5 +38,68 @@
 			</array>
 		</dict>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>paypal</string>
+		<string>instagram</string>
+		<string>youtube</string>
+		<string>pocket</string>
+		<string>firefox-focus</string>
+		<string>firefox-klar</string>
+		<string>ymail</string>
+		<string>ms-outlook</string>
+		<string>airmail</string>
+		<string>italiaonline-mailto</string>
+		<string>mailru-mailto</string>
+		<string>mymail-mailto</string>
+		<string>readdle-spark</string>
+		<string>itms-books</string>
+		<string>org-appextension-feature-password-management</string>
+		<string>googlegmail</string>
+		<string>fastmail</string>
+		<string>protonmail</string>
+		<string>whatsapp</string>
+	</array>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Net Skip uses your camera to scan QR codes and take photos and video.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Net Skip requires Face ID to access your saved passwords and payment methods.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Websites you visit may request your location.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Net Skip uses your microphone to record and upload audio.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>This lets you save photos.</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>QuickActionIntent</string>
+		<string>org.mozilla.ios.firefox.browsing</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.url</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>1Password Fill Browser Action</string>
+			<key>UTTypeIdentifier</key>
+			<string>org.appextension.fill-browser-action</string>
+			<key>UTTypeSize64IconFile</key>
+			<string></string>
+		</dict>
+	</array>
 </dict>
 </plist>
