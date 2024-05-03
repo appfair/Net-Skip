@@ -57,14 +57,14 @@ public struct SearchEngine : Identifiable {
     public let homeURL: String
     public let name: () -> String
     public let queryURL: (String, String) -> String?
-    public let suggestionURL: (String, String) -> String?
+    public let suggestions: (String) async throws -> [String]?
 
-    public init(id: String, homeURL: String, name: @escaping () -> String, queryURL: @escaping (String, String) -> String?, suggestionURL: @escaping (String, String) -> String?) {
+    public init(id: String, homeURL: String, name: @escaping () -> String, queryURL: @escaping (String, String) -> String?, suggestions: @escaping (String) async throws -> [String]?) {
         self.id = id
         self.homeURL = homeURL
         self.name = name
         self.queryURL = queryURL
-        self.suggestionURL = suggestionURL
+        self.suggestions = suggestions
     }
 }
 
@@ -163,30 +163,52 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
     }
 
     private func initializeSchema() throws {
+
+        try ctx.exec(sql: "PRAGMA auto_vacuum=INCREMENTAL")
+
+        // perform the *additive* migration from earlier schema versions
+        var currentVersion = try currentSchemaVersion()
+
         /// The SQL for creating a PageInfo table
         func createTableSQL(_ type: PageInfo.PageType) -> String {
             "CREATE TABLE \(type.tableName) (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL, title TEXT, date FLOAT NOT NULL)"
         }
 
-        // perform the additive migration from earlier schema versions
-        var currentVersion = try currentSchemaVersion()
         currentVersion = try migrateSchema(v: Int64(1), current: currentVersion, ddl: createTableSQL(.history))
         currentVersion = try migrateSchema(v: Int64(2), current: currentVersion, ddl: createTableSQL(.favorite))
         currentVersion = try migrateSchema(v: Int64(3), current: currentVersion, ddl: createTableSQL(.active))
+
+        /// Create indices on all the PageInfo tables to be able to search by URL, title, or date.
+        currentVersion = try migrateSchema(v: Int64(4), current: currentVersion, ddl: [PageInfo.PageType.history, .favorite, .active].map { type in
+                """
+                CREATE INDEX idx_url ON \(type.tableName)(url);
+                CREATE INDEX idx_title ON \(type.tableName)(title);
+                CREATE INDEX idx_date ON \(type.tableName)(date);
+
+                """
+            }.joined())
+
+        // if auto_vacuum is set after tables were created, we need to vacuum for it to take effect (cannot run within a transaction)
+        currentVersion = try migrateSchema(v: Int64(5), current: currentVersion, transaction: nil, ddl: "VACUUM")
     }
 
     private func currentSchemaVersion() throws -> Int64 {
-        try ctx.exec(sql: "CREATE TABLE IF NOT EXISTS \(Self.schemaVersionTable) (id INTEGER PRIMARY KEY, version INTEGER)")
-        try ctx.exec(sql: "INSERT OR IGNORE INTO \(Self.schemaVersionTable) (id, version) VALUES (0, 0)")
-        return try ctx.query(sql: "SELECT version FROM \(Self.schemaVersionTable)").first?.first?.integerValue ?? Int64(0)
+        do {
+            return try ctx.query(sql: "SELECT version FROM \(Self.schemaVersionTable)").first?.first?.integerValue ?? Int64(0)
+        } catch {
+            // table may not exist; create it
+            try ctx.exec(sql: "CREATE TABLE IF NOT EXISTS \(Self.schemaVersionTable) (id INTEGER PRIMARY KEY, version INTEGER)")
+            try ctx.exec(sql: "INSERT OR IGNORE INTO \(Self.schemaVersionTable) (id, version) VALUES (0, 0)")
+            return try ctx.query(sql: "SELECT version FROM \(Self.schemaVersionTable)").first?.first?.integerValue ?? Int64(0)
+        }
     }
 
-    private func migrateSchema(v version: Int64, current: Int64, ddl: String) throws -> Int64 {
+    private func migrateSchema(v version: Int64, current: Int64, transaction: SQLContext.TransactionMode? = .immediate, ddl: String) throws -> Int64 {
         guard current < version else {
             return current
         }
         let startTime = Date.now
-        try ctx.transaction {
+        try ctx.transaction(transaction) {
             try ctx.exec(sql: ddl)
             try ctx.exec(sql: "UPDATE \(Self.schemaVersionTable) SET version = ?", parameters: [.integer(version)])
         }

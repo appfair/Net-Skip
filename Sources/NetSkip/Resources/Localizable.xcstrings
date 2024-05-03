@@ -53,7 +53,7 @@
       "comment" : "more button string for adding a favorite"
     },
     "Favorites" : {
-      "comment" : "more button string for opening the favorites list"
+      "comment" : "favorites page list sheet title\ntab selection for viewing the favorites list"
     },
     "Find on Page" : {
       "comment" : "more button string for finding on the current page"
@@ -71,7 +71,10 @@
       "comment" : "settings toggle label for button haptic feedback"
     },
     "History" : {
-      "comment" : "more button string for opening the history"
+      "comment" : "history page list sheet title\ntab selection for viewing the history list"
+    },
+    "History and Favorites" : {
+      "comment" : "more button string for opening the history and favorites"
     },
     "Home" : {
       "comment" : "home button label"
@@ -96,6 +99,9 @@
     },
     "No Items" : {
       "comment" : "sheet placeholder text when there are no items available"
+    },
+    "No Suggestions" : {
+
     },
     "Qwant" : {
       "comment" : "search engine name for Qwant"
@@ -289,7 +295,7 @@
       "comment" : "search engine name for Searx"
     },
     "Settings" : {
-      "comment" : "more button string for opening the settings"
+      "comment" : "more button string for opening the settings\nsettings sheet title"
     },
     "StartPage" : {
       "comment" : "search engine name for StartPage"

@@ -1,12 +1,1 @@
-browser
-web
-free
-libre
-open-source
-incognito
-mozilla
-gpl
-brave
-chrome
-edge
-safari
+browser,web,free,libre,open-source,incognito,mozilla,gpl,brave,chrome,edge,safari
