@@ -33,22 +33,19 @@ extension SearchEngine {
 }
 
 
-extension SearchEngine {
-    fileprivate static func fetchSuggestions<T: Decodable>(_ type: T.Type, from url: String) async throws -> T {
-        guard let suggestionURL = URL(string: url) else {
-            throw URLError(.badURL)
-        }
-        let request = URLRequest(url: suggestionURL)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let code = (response as? HTTPURLResponse)?.statusCode
-
-        if code != 200 {
-            throw URLError(.badServerResponse)
-        }
-
-        let decoder = JSONDecoder()
-        return try decoder.decode(T.self, from: data)
+fileprivate func fetchSuggestions(from url: String) async throws -> Data {
+    guard let suggestionURL = URL(string: url) else {
+        throw URLError(.badURL)
     }
+    let request = URLRequest(url: suggestionURL)
+    let (data, response) = try await URLSession.shared.data(for: request)
+    let code = (response as? HTTPURLResponse)?.statusCode
+
+    if code != 200 {
+        throw URLError(.badServerResponse)
+    }
+
+    return data
 }
 
 extension SearchEngine {
@@ -60,7 +57,7 @@ extension SearchEngine {
         // curl 'https://duckduckgo.com/ac/?q=sail&kl=en'
         // [{"phrase":"sailor moon"},{"phrase":"sailing anarchy"},{"phrase":"sailrite"},{"phrase":"sailor"},{"phrase":"sailboats for sale"},{"phrase":"sailpoint"},{"phrase":"sailboat insurance"},{"phrase":"sailfish"}]
         // SKIP NOWARN
-        let responses: [DDGResponse] = try await fetchSuggestions([DDGResponse].self, from: "https://duckduckgo.com/ac/?q=\(q)")
+        let responses: [DDGResponse] = try JSONDecoder().decode([DDGResponse].self, from: await fetchSuggestions(from: "https://duckduckgo.com/ac/?q=\(q)"))
         return responses.map({ $0.phrase })
     }
 }
@@ -79,7 +76,7 @@ extension SearchEngine {
         // &itemsCount=5
         // ["sailor moon","sailor","sailer verlag","sailfish","sailer"]
         // SKIP NOWARN
-        return try await fetchSuggestions([String].self, from: "https://api.swisscows.com/suggest?query=\(q)")
+        return try JSONDecoder().decode([String].self, from: await fetchSuggestions(from: "https://api.swisscows.com/suggest?query=\(q)"))
     }
 }
 
