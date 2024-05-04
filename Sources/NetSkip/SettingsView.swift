@@ -77,10 +77,12 @@ struct SettingsView : View {
                             // Cannot local local resource paths on Android
                             // https://github.com/skiptools/skip-web/issues/1
                             //WebView(url: aboutPage)
+                            #if !os(macOS)
                             VStack(spacing: 0.0) {
                                 TitleView()
                                 WebView(html: (try? String(contentsOf: aboutPage)) ?? "error loading local content")
                             }
+                            #endif
                         } label: {
                             Text("About \(appName)", bundle: .module, comment: "settings title menu for about app")
                         }

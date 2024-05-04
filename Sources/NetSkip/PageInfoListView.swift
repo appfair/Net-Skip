@@ -61,7 +61,9 @@ struct PageInfoListView<ToolbarItems : ToolbarContent> : View {
             #endif
         }
         .navigationTitle(type.navigationTitle)
+        #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 
     var itemsListView: some View {
