@@ -113,11 +113,12 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         .sensoryFeedback(.error, trigger: triggerError)
         #endif
         .onChange(of: currentState?.scrollingOffset) {
-        //.onChange(of: currentState?.scrollingDown) {
+//        .onChange(of: currentState?.scrollingDown) {
             let scrollingDown = currentState?.scrollingDown == false
             // whenever we change scrolling, show/hide the bottom bar depending on the direction
             if self.showBottomBar != scrollingDown {
                 withAnimation {
+                    logger.log("scrollingDown: \(scrollingDown) offset: \(currentState?.scrollingOffset ?? 0.0)")
                     self.showBottomBar = scrollingDown
                 }
             }
@@ -127,6 +128,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             self.selectedTabState = selectedTab.description // persist the last selected tab so we can restore it when re-starting
         }
         .onAppear {
+            logger.info("restoring active tabs")
             restoreActiveTabs()
             self.showBottomBar = true
         }
@@ -229,7 +231,13 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     }
 
     var currentViewModel: BrowserViewModel! {
+        #if SKIP
+        // workaround for crash on Android because currentViewModel returns nil
         tabs.first(where: { $0.id == self.selectedTab })
+            ?? newViewModel(PageInfo(url: nil))
+        #else
+        tabs.first(where: { $0.id == self.selectedTab })
+        #endif
     }
 
     var currentState: WebViewState? {
