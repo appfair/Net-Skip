@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		490B03B22BC6E0E300C24D5D /* about.html in Resources */ = {isa = PBXBuildFile; fileRef = 490B03B12BC6E0E300C24D5D /* about.html */; };
 		49231BAC2AC5BCEF00F98ADF /* NetSkipApp in Frameworks */ = {isa = PBXBuildFile; productRef = 49231BAB2AC5BCEF00F98ADF /* NetSkipApp */; };
 		49231BAD2AC5BCEF00F98ADF /* NetSkipApp in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 49231BAB2AC5BCEF00F98ADF /* NetSkipApp */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		499CD43B2AC5B799001AE8D8 /* NetSkipAppMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49F90C2B2A52156200F06D93 /* NetSkipAppMain.swift */; };
@@ -29,7 +28,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		490B03B12BC6E0E300C24D5D /* about.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = about.html; sourceTree = "<group>"; };
 		492762D52B28A3A100ADF99B /* NetSkip.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NetSkip.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		493609562A6B7EAE00C401E2 /* NetSkip */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = NetSkip; path = ..; sourceTree = "<group>"; };
 		4950C5162BC1925000CB5BA4 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Base; path = Base.lproj/Info.plist; sourceTree = "<group>"; };
@@ -87,7 +85,6 @@
 			isa = PBXGroup;
 			children = (
 				49F90C2B2A52156200F06D93 /* NetSkipAppMain.swift */,
-				490B03B12BC6E0E300C24D5D /* about.html */,
 				4950C4F72BC1903D00CB5BA4 /* Info.plist */,
 				49F90C2F2A52156300F06D93 /* Assets.xcassets */,
 				49F90C312A52156300F06D93 /* Entitlements.plist */,
@@ -128,7 +125,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1530;
-				LastUpgradeCheck = 1530;
+				LastUpgradeCheck = 1540;
 			};
 			buildConfigurationList = 49F90C232A52156200F06D93 /* Build configuration list for PBXProject "NetSkip" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -186,7 +183,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				499CD4402AC5B799001AE8D8 /* Assets.xcassets in Resources */,
-				490B03B22BC6E0E300C24D5D /* about.html in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

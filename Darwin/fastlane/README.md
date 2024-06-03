@@ -13,15 +13,13 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 # Available Actions
 
-## iOS
-
-### ios custom_lane
+### release
 
 ```sh
-[bundle exec] fastlane ios custom_lane
+[bundle exec] fastlane release
 ```
 
-Description of what the lane does
+
 
 ----
 

@@ -64,14 +64,16 @@ struct SettingsView : View {
 
                 Section {
                     // FIXME: should not need to explicitly specify Base.lproj; it should load as a fallback language automatically
-                    let aboutURL = Bundle.main.url(forResource: "about", withExtension: "html")
+                    let aboutURL = Bundle.module.url(forResource: "about", withExtension: "html")
                     if let aboutPage = aboutURL {
                         #if !SKIP
                         // FIXME: need Skip support for localizedInfoDictionary / infoDictionary
                         let dict = Bundle.main.localizedInfoDictionary ?? Bundle.main.infoDictionary
                         let appName = dict?["CFBundleDisplayName"] as? String ?? "App"
+                        let appVersion = dict?["CFBundleShortVersionString"] as? String ?? "0.0.0"
                         #else
                         let appName = "App"
+                        let appVersion = "0.0.0"
                         #endif
                         NavigationLink {
                             // Cannot local local resource paths on Android
@@ -80,11 +82,13 @@ struct SettingsView : View {
                             #if !os(macOS)
                             VStack(spacing: 0.0) {
                                 TitleView()
-                                WebView(html: (try? String(contentsOf: aboutPage)) ?? "error loading local content")
+                                let aboutHTML = ((try? String(contentsOf: aboutPage)) ?? "error loading local content")
+                                    .replacingOccurrences(of: "APP_VERSION", with: appVersion)
+                                WebView(html: aboutHTML)
                             }
                             #endif
                         } label: {
-                            Text("About \(appName)", bundle: .module, comment: "settings title menu for about app")
+                            Text("About \(appName) \(appVersion)", bundle: .module, comment: "settings title menu for about app in the form ”About APP_NAME APP_VERSION”")
                         }
                     }
                 }

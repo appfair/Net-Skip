@@ -112,13 +112,12 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         .sensoryFeedback(.warning, trigger: triggerWarning)
         .sensoryFeedback(.error, trigger: triggerError)
         #endif
-        .onChange(of: currentState?.scrollingOffset) {
-//        .onChange(of: currentState?.scrollingDown) {
+        .onChange(of: currentState?.scrollingDown) {
             let scrollingDown = currentState?.scrollingDown == false
             // whenever we change scrolling, show/hide the bottom bar depending on the direction
             if self.showBottomBar != scrollingDown {
                 withAnimation {
-                    logger.log("scrollingDown: \(scrollingDown) offset: \(currentState?.scrollingOffset ?? 0.0)")
+                    //logger.log("scrollingDown: \(scrollingDown) offset: \(currentState?.scrollingOffset ?? 0.0)")
                     self.showBottomBar = scrollingDown
                 }
             }
