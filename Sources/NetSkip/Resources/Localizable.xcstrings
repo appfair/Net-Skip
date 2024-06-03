@@ -1,8 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "About %@" : {
-      "comment" : "settings title menu for about app"
+    "About %@ %@" : {
+      "comment" : "settings title menu for about app in the form ”About APP_NAME APP_VERSION”",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "About %1$@ %2$@"
+          }
+        }
+      }
     },
     "Appearance" : {
       "comment" : "settings appearance picker label"

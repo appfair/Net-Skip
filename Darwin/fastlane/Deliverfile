@@ -1,10 +1,12 @@
 
 copyright "#{Time.now.year} Net Skip"
+#default_language("en-US")
 
 force(true) # Skip HTML report verification
-#default_language("en-US")
-#automatic_release(true)
+automatic_release(true)
 skip_screenshots(false)
-skip_binary_upload(true)
 precheck_include_in_app_purchases(false)
+
+#skip_binary_upload(true)
+submit_for_review: true
 
