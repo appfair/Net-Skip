@@ -79,11 +79,11 @@ Dependencies/
 # For more information about the recommended setup visit:
 # https://docs.fastlane.tools/best-practices/source-control/#source-control
 
-apikey.json
-fastlane/report.xml
-fastlane/Preview.html
-fastlane/screenshots/**/*.png
-fastlane/test_output
+Darwin/fastlane/apikey.json
+Darwin/fastlane/report.xml
+Darwin/fastlane/Preview.html
+#Darwin/fastlane/screenshots/**/*.png
+Darwin/fastlane/test_output
 
 # Code Injection
 #
