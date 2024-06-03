@@ -2,6 +2,20 @@
 
 Net Skip is a web browser app for iOS and Android.
 
+
+<p style="vertical-align: middle; margin-left: auto; margin-right: auto; text-align: center;">
+<a href="https://apps.apple.com/us/app/net-skip/id1640618584?itscg=30200&amp;itsct=apps_box_appicon" style="width: 170px; height: 170px; border-radius: 22%; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: auto; margin-right: auto; text-align: center;">
+  <img src="/img/net-skip-icon.jpg" alt="Net Skip" style="width: 170px; height: 170px; border-radius: 22%; overflow: hidden; display: inline-block; vertical-align: middle;" />
+</a>
+</p>
+
+<p style="vertical-align: middle; margin-left: auto; margin-right: auto; text-align: center;">
+<a href="https://apps.apple.com/us/app/net-skip/id1640618584?itscg=30200&amp;itsct=apps_box_appicon" stylex="width: 170px; height: 170px; border-radius: 22%; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: auto; margin-right: auto; text-align: center;">
+  <img alt="Download on App Store Button" src="https://appfair.org/img/download-app-store.png" style="width: 170px; display: inline-block; vertical-align: middle;" />
+</a>
+</p>
+
+
 ## Building
 
 This project is both a stand-alone Swift Package Manager module,
