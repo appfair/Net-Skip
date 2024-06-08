@@ -15,10 +15,29 @@
 
 default_platform(:ios)
 
+lane :assemble do |options|
+  # only build the iOS side of the app
+  ENV["SKIP_ZERO"] = "true"
+  build_app(
+    sdk: "iphoneos",
+    xcconfig: "fastlane/AppStore.xcconfig",
+    xcargs: "-skipPackagePluginValidation -skipMacroValidation",
+    derived_data_path: "../.build/Darwin/DerivedData",
+    output_directory: "../.build/fastlane/Darwin",
+    skip_archive: ENV["FASTLANE_SKIP_ARCHIVE"] == "YES",
+    skip_codesigning: ENV["FASTLANE_SKIP_CODESIGNING"] == "YES"
+  ) 
+end 
+
 lane :release do |options|
   desc "Build and release app"
-  build_app(sdk: "iphoneos", output_directory: ".build")
-  upload_to_app_store(api_key_path: "fastlane/apikey.json")
-end
 
+  assemble
+
+  upload_to_app_store(
+    api_key_path: "fastlane/apikey.json",
+    submission_information: { add_id_info_uses_idfa: false },
+    release_notes: { default: "Fixes and improvements." }
+  )
+end
 
