@@ -10,7 +10,7 @@ skip {
 }
 
 kotlin {
-    jvmToolchain(libs.versions.jvm.get().toInt())
+    //jvmToolchain(libs.versions.jvm.get().toInt())
 }
 
 android {
@@ -19,6 +19,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.toVersion(libs.versions.jvm.get())
         targetCompatibility = JavaVersion.toVersion(libs.versions.jvm.get())
+    }
+    kotlinOptions {
+        jvmTarget = libs.versions.jvm.get().toString()
     }
 
     defaultConfig {
