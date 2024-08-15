@@ -826,7 +826,8 @@ struct TitleView : View {
 
 @Observable public class BrowserViewModel: Identifiable {
     /// The persistent ID of the page
-    public var id: PageInfo.ID // var to workaround Kotlin to 2 error: ”Property must be initialized, be final, or be abstract.”
+    // SKIP INSERT: @Suppress("MUST_BE_INITIALIZED_OR_FINAL_OR_ABSTRACT") // var to workaround Kotlin to 2 error: ”Property must be initialized, be final, or be abstract.”
+    public let id: PageInfo.ID
     let navigator: WebViewNavigator
     let configuration: WebEngineConfiguration
     let store: WebBrowserStore
