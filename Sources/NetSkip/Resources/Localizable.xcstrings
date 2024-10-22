@@ -61,7 +61,7 @@
       "comment" : "more button string for adding a favorite"
     },
     "Favorites" : {
-      "comment" : "favorites page list sheet title\ntab selection for viewing the favorites list"
+      "comment" : "favorites page list sheet title\nmore button string for opening the favorites list\ntab selection for viewing the favorites list"
     },
     "Find on Page" : {
       "comment" : "more button string for finding on the current page"
@@ -79,7 +79,7 @@
       "comment" : "settings toggle label for button haptic feedback"
     },
     "History" : {
-      "comment" : "history page list sheet title\ntab selection for viewing the history list"
+      "comment" : "history page list sheet title\nmore button string for opening the history\ntab selection for viewing the history list"
     },
     "History and Favorites" : {
       "comment" : "more button string for opening the history and favorites"
@@ -103,7 +103,7 @@
       "comment" : "more button string for creating a new private tab"
     },
     "New Tab" : {
-      "comment" : "more button string for creating a new tab"
+      "comment" : "more button string for creating a new tab\nnew tab action label"
     },
     "No Items" : {
       "comment" : "sheet placeholder text when there are no items available"
