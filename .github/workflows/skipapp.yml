@@ -1,4 +1,4 @@
-name: netskip-app
+name: Net-Skip
 on:
   push:
     branches: '*'

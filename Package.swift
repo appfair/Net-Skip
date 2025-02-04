@@ -1,18 +1,19 @@
 // swift-tools-version: 5.9
 // This is free software: you can redistribute and/or modify it
-// under the terms of the GNU Lesser General Public License 3.0
+// under the terms of the GNU General Public License 3.0
 // as published by the Free Software Foundation https://fsf.org
 
 import PackageDescription
 
 let package = Package(
-    name: "netskip-app",
+    name: "net-skip-app",
     defaultLocalization: "en",
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "NetSkipApp", type: .dynamic, targets: ["NetSkip"]),
     ],
     dependencies: [
+        .package(url: "https://github.com/appfair/appfair-app.git", from: "1.0.0"),
         .package(url: "https://source.skip.tools/skip.git", from: "1.0.0"),
         .package(url: "https://source.skip.tools/skip-foundation.git", from: "1.0.0"),
         .package(url: "https://source.skip.tools/skip-ui.git", from: "1.0.0"),
@@ -26,6 +27,7 @@ let package = Package(
     targets: [
         .target(name: "NetSkip", dependencies: [
             "NetSkipModel",
+            .product(name: "AppFairApp", package: "appfair-app"),
             .product(name: "SkipUI", package: "skip-ui"),
             .product(name: "SkipWeb", package: "skip-web"),
         ], resources: [.process("Resources")], plugins: [.plugin(name: "skipstone", package: "skip")]),
