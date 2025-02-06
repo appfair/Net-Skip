@@ -27,7 +27,7 @@ let package = Package(
     targets: [
         .target(name: "NetSkip", dependencies: [
             "NetSkipModel",
-            .product(name: "AppFairApp", package: "appfair-app"),
+            .product(name: "AppFairUI", package: "appfair-app"),
             .product(name: "SkipUI", package: "skip-ui"),
             .product(name: "SkipWeb", package: "skip-web"),
         ], resources: [.process("Resources")], plugins: [.plugin(name: "skipstone", package: "skip")]),
