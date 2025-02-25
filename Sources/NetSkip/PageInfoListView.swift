@@ -1,6 +1,4 @@
-// This is free software: you can redistribute and/or modify it
-// under the terms of the GNU General Public License 3.0
-// as published by the Free Software Foundation https://fsf.org
+// SPDX-License-Identifier: GPL-3.0-only
 import SwiftUI
 import SkipWeb
 import NetSkipModel
