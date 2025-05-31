@@ -5,7 +5,7 @@ import NetSkipModel
 
 #if SKIP || os(iOS)
 
-let fallbackURL = URL(string: "file:///tmp/SENTINEL_URL")!
+let fallbackURL = "about:blank"
 
 ///// the background for the
 #if SKIP
@@ -102,7 +102,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
         .indexViewStyle(PageIndexViewStyle(backgroundDisplayMode: .automatic))
         .onOpenURL { url in
-            openURL(url: url, newTab: true)
+            openURL(url: url.absoluteString, newTab: true)
         }
         .sensoryFeedback(.start, trigger: triggerStart)
         .sensoryFeedback(.stop, trigger: triggerStop)
@@ -143,7 +143,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         let activeTabs = trying { try store.loadItems(type: PageInfo.PageType.active, ids: []) }
 
         for activeTab in activeTabs ?? [] {
-            logger.log("restoring tab \(activeTab.id): \(activeTab.url?.absoluteString ?? "NONE") title=\(activeTab.title ?? "")")
+            logger.log("restoring tab \(activeTab.id): \(activeTab.url ?? "NONE") title=\(activeTab.title ?? "")")
             let viewModel = newViewModel(activeTab)
             self.tabs.append(viewModel)
         }
@@ -163,13 +163,14 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
 
     func newViewModel(_ pageInfo: PageInfo) -> BrowserViewModel {
         let newID = (try? store.saveItems(type: .active, items: [pageInfo]).first) ?? PageInfo.ID(0)
-        return BrowserViewModel(id: newID, navigator: WebViewNavigator(initialURL: pageInfo.url), configuration: configuration, store: store)
+        let newURL = URL(string: pageInfo.url ?? fallbackURL)
+        return BrowserViewModel(id: newID, navigator: WebViewNavigator(initialURL: newURL), configuration: configuration, store: store)
     }
 
     func activeTabsView() -> some View {
         NavigationStack {
             PageInfoListView(type: PageInfo.PageType.active, store: store, onSelect: { pageInfo in
-                logger.info("select tab: \(pageInfo.url?.absoluteString ?? "NONE")")
+                logger.info("select tab: \(pageInfo.url ?? "NONE")")
                 withAnimation {
                     self.selectedTab = pageInfo.id
                 }
@@ -206,14 +207,14 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     #if !SKIP
     func openURLAction(newTab: Bool) -> OpenURLAction {
         OpenURLAction(handler: { url in
-            openURL(url: url, newTab: newTab)
+            openURL(url: url.absoluteString, newTab: newTab)
             // TODO: reject unsupported URLs
             return OpenURLAction.Result.handled
         })
     }
     #endif
 
-    func openURL(url: URL, newTab: Bool) {
+    func openURL(url: String, newTab: Bool) {
         logger.log("openURL: \(url) newTab=\(newTab)")
         // if we have no open tabs, of if the current tab is not blank, then open it in a new URL
         if self.currentViewModel == nil || (newTab == true && self.currentURL == nil) {
@@ -221,10 +222,12 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         }
         var newURL = url
         // if the scheme netskip:// then change it to https://
-        if url.scheme == "netskip" {
-            newURL = URL(string: url.absoluteString.replacingOccurrences(of: "netskip://", with: "https://")) ?? url
+        if url.hasPrefix("netskip://") {
+            newURL = url.replacingOccurrences(of: "netskip://", with: "https://")
         }
-        currentNavigator?.load(url: newURL)
+        if let navURL = URL(string: newURL) {
+            currentNavigator?.load(url: navURL)
+        }
     }
 
     var currentViewModel: BrowserViewModel! {
@@ -249,18 +252,16 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         currentNavigator?.webEngine?.webView
     }
 
-    var currentURL: URL? {
+    var currentURL: String? {
         if let url = currentState?.pageURL {
             return url
         }
 
         if let url = currentWebView?.url {
             #if SKIP
-            // returns a String on Android
-            // https://developer.android.com/reference/android/webkit/WebView#getUrl()
-            return URL(string: url)
-            #else
             return url
+            #else
+            return url.absoluteString
             #endif
         }
 
@@ -304,7 +305,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
 
     func favoritesPageInfoView() -> some View {
         PageInfoListView(type: PageInfo.PageType.favorite, store: store, onSelect: { pageInfo in
-            logger.info("select favorite: \(pageInfo.url?.absoluteString ?? "NONE")")
+            logger.info("select favorite: \(pageInfo.url ?? "NONE")")
             if let url = pageInfo.url {
                 openURL(url: url, newTab: true)
             }
@@ -325,7 +326,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
 
     func historyPageInfoView() -> some View {
         PageInfoListView(type: PageInfo.PageType.history, store: store, onSelect: { pageInfo in
-            logger.info("select history: \(pageInfo.url?.absoluteString ?? "NONE")")
+            logger.info("select history: \(pageInfo.url ?? "NONE")")
             if let url = pageInfo.url {
                 openURL(url: url, newTab: true)
             }
@@ -496,8 +497,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         }
     }
 
-    @ViewBuilder func historyItem(item: BackForwardListItem) -> some View {
-        Button(item.title?.isEmpty == false ? (item.title ?? "") : item.url.absoluteString) {
+    @ViewBuilder func historyItem(item: WebHistoryItem) -> some View {
+        Button(item.title?.isEmpty == false ? (item.title ?? "") : item.url) {
             currentViewModel?.navigator.go(item)
         }
     }
@@ -619,7 +620,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         #endif
     }
 
-    func newTabAction(url: URL? = nil) {
+    func newTabAction(url: String? = nil) {
         logger.info("newTabAction")
         hapticFeedback()
         let info = PageInfo(url: url) // open to a blank page
@@ -649,7 +650,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         logger.info("favoriteAction")
         hapticFeedback()
         if let url = self.currentURL {
-            logger.info("addPageToFavorite: \(url.absoluteString)")
+            logger.info("addPageToFavorite: \(url)")
             trying {
                 _ = try store.saveItems(type: .favorite, items: [PageInfo(url: url, title: currentState?.pageTitle ?? currentWebView?.title)])
             }

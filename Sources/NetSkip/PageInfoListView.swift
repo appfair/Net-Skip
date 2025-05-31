@@ -81,7 +81,7 @@ struct PageInfoListView<ToolbarItems : ToolbarContent> : View {
 //                                    .font(.body)
 //                                    .lineLimit(1)
                         #endif
-                        Text(item.url?.absoluteString ?? "")
+                        Text(item.url ?? "")
                             .font(.caption)
                             .foregroundStyle(Color.gray)
                             .lineLimit(1)
