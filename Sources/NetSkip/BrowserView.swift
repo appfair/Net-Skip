@@ -82,7 +82,7 @@ import NetSkipModel
         }
 
         if let url = webView.url {
-            updatePageURL(nil, url)
+            updatePageURL(nil, url.absoluteString)
         }
 
         webView.configuration.defaultWebpagePreferences.allowsContentJavaScript = enableJavaScript
@@ -113,10 +113,10 @@ import NetSkipModel
         #endif
     }
 
-    func updatePageURL(_ oldURL: URL?, _ newURL: URL?) {
+    func updatePageURL(_ oldURL: String?, _ newURL: String?) {
         if let newURL = newURL {
             logger.log("changed pageURL to: \(newURL)")
-            viewModel.urlTextField = newURL.absoluteString
+            viewModel.urlTextField = newURL
             showBottomBar = true // when the URL changes, always show the bottom bar again
             if var pageInfo = trying(operation: { try store.loadItems(type: .active, ids: [viewModel.id]) })?.first {
                 pageInfo.url = newURL
@@ -353,7 +353,7 @@ import NetSkipModel
 
     func addPageToHistory() {
         if let url = state.pageURL, let title = state.pageTitle {
-            logger.info("addPageToHistory: \(title) \(url.absoluteString)")
+            logger.info("addPageToHistory: \(title) \(url)")
             trying {
                 // TODO: update pre-existing history if the URL aleady exists
                 _ = try store.saveItems(type: .history, items: [PageInfo(url: url, title: title)])

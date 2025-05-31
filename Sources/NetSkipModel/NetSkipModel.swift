@@ -34,11 +34,11 @@ public struct PageInfo : Identifiable {
 
     /// The ID of this history item if it is persistent; 0 indicates that it is new
     public var id: ID
-    public var url: URL?
+    public var url: String?
     public var title: String?
     public var date: Date
 
-    public init(id: ID = Int64(0), url: URL?, title: String? = nil, date: Date = Date.now) {
+    public init(id: ID = Int64(0), url: String?, title: String? = nil, date: Date = Date.now) {
         self.id = id
         self.url = url
         self.title = title
@@ -98,9 +98,9 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
             logger.log("saveItem: \(table) \(item.id)")
 
             // URL is not nullable, but we want to be able to store a null URL, so default to blank
-            let url = SQLValue.text(item.url?.absoluteString ?? "")
+            let url = SQLValue.text(item.url ?? "")
             let title = item.title.flatMap { SQLValue.text($0) } ?? SQLValue.null
-            let date = SQLValue.float(item.date.timeIntervalSince1970)
+            let date = SQLValue.real(item.date.timeIntervalSince1970)
 
             let statement: SQLStatement
             if item.id != newID { // id=0 means new record
@@ -113,7 +113,7 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
             try statement.bind(title, at: 2)
             try statement.bind(date, at: 3)
             if item.id != newID {
-                try statement.bind(SQLValue.integer(item.id), at: 4)
+                try statement.bind(SQLValue.long(item.id), at: 4)
             }
 
             defer { do { try statement.close() } catch {} }
@@ -137,12 +137,12 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
 
         var items: [PageInfo] = []
         while try statement.next() {
-            let id = statement.integer(at: 0)
-            let url = statement.string(at: 1) ?? ""
-            let title = statement.string(at: 2)
-            let date = statement.double(at: 3)
+            let id = statement.long(at: 0)
+            let url = statement.text(at: 1) ?? ""
+            let title = statement.text(at: 2)
+            let date = statement.real(at: 3)
 
-            let item = PageInfo(id: id, url: URL(string: url), title: title, date: Date(timeIntervalSince1970: date))
+            let item = PageInfo(id: id, url: url, title: title, date: Date(timeIntervalSince1970: date))
             items.append(item)
         }
         return items
@@ -191,12 +191,12 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
 
     private func currentSchemaVersion() throws -> Int64 {
         do {
-            return try ctx.query(sql: "SELECT version FROM \(Self.schemaVersionTable)").first?.first?.integerValue ?? Int64(0)
+            return try ctx.query(sql: "SELECT version FROM \(Self.schemaVersionTable)").first?.first?.longValue ?? Int64(0)
         } catch {
             // table may not exist; create it
             try ctx.exec(sql: "CREATE TABLE IF NOT EXISTS \(Self.schemaVersionTable) (id INTEGER PRIMARY KEY, version INTEGER)")
             try ctx.exec(sql: "INSERT OR IGNORE INTO \(Self.schemaVersionTable) (id, version) VALUES (0, 0)")
-            return try ctx.query(sql: "SELECT version FROM \(Self.schemaVersionTable)").first?.first?.integerValue ?? Int64(0)
+            return try ctx.query(sql: "SELECT version FROM \(Self.schemaVersionTable)").first?.first?.longValue ?? Int64(0)
         }
     }
 
@@ -207,7 +207,7 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
         let startTime = Date.now
         try ctx.transaction(transaction) {
             try ctx.exec(sql: ddl)
-            try ctx.exec(sql: "UPDATE \(Self.schemaVersionTable) SET version = ?", parameters: [.integer(version)])
+            try ctx.exec(sql: "UPDATE \(Self.schemaVersionTable) SET version = ?", parameters: [.long(version)])
         }
         logger.log("updated database schema to \(version) in \(Date.now.timeIntervalSince1970 - startTime.timeIntervalSince1970)")
         return version

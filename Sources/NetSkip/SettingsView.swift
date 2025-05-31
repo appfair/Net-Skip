@@ -4,7 +4,7 @@ import SkipWeb
 import NetSkipModel
 
 struct SettingsView : View {
-    @ObservedObject var configuration: WebEngineConfiguration
+    var configuration: WebEngineConfiguration
 
     @Binding var appearance: String
     @Binding var buttonHaptics: Bool
