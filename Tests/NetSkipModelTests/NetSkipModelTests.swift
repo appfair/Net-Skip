@@ -26,7 +26,7 @@ final class NetSkipModelTests: XCTestCase {
 
         XCTAssertEqual(0, try store.loadItems(type: .history, ids: []).count)
 
-        let url = URL(string: "https://www.example.org")!
+        let url = "https://www.example.org"
         let info = PageInfo(url: url)
         try store.saveItems(type: .history, items: [info])
         var info2 = try XCTUnwrap(store.loadItems(type: .history, ids: []).first)
