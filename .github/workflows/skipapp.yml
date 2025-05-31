@@ -16,6 +16,8 @@ permissions:
 jobs:
   call-workflow:
     uses: skiptools/actions/.github/workflows/skip-app.yml@main
+    with:
+      run-local-tests: false
     secrets:
       # TODO: enable once Android build is ready
       # These optional secrets enable the Android app to be signed

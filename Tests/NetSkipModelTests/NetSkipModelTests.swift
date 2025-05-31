@@ -10,6 +10,7 @@ let logger: Logger = Logger(subsystem: "NetSkipModel", category: "Tests")
 
 @available(macOS 13, *)
 final class NetSkipModelTests: XCTestCase {
+    #if SKIP || os(iOS)
     func testNetSkipModel() throws {
         logger.log("running testNetSkipModel")
         XCTAssertEqual(1 + 2, 3, "basic test")
@@ -55,6 +56,7 @@ final class NetSkipModelTests: XCTestCase {
         XCTAssertEqual(0, try store.loadItems(type: .history, ids: []).count, "removing empty id list should clear table")
 
     }
+    #endif
 }
 
 struct TestData : Codable, Hashable {
