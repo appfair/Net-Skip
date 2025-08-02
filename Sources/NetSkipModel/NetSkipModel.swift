@@ -83,7 +83,10 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
     static let schemaVersionTable = "schema_version"
 
     public init(url: URL?) throws {
-        self.ctx = try SQLContext(path: url?.path ?? ":memory:", flags: [.readWrite, .create], logLevel: .info) // , configuration: .plus)
+        self.ctx = try SQLContext(path: url?.path ?? ":memory:", flags: [.readWrite, .create]) // , configuration: .plus)
+        ctx.trace { sql in
+            logger.info("SQL: \(sql)")
+        }
         try self.initializeSchema()
     }
 
@@ -191,12 +194,12 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
 
     private func currentSchemaVersion() throws -> Int64 {
         do {
-            return try ctx.query(sql: "SELECT version FROM \(Self.schemaVersionTable)").first?.first?.longValue ?? Int64(0)
+            return try ctx.selectAll(sql: "SELECT version FROM \(Self.schemaVersionTable)").first?.first?.longValue ?? Int64(0)
         } catch {
             // table may not exist; create it
             try ctx.exec(sql: "CREATE TABLE IF NOT EXISTS \(Self.schemaVersionTable) (id INTEGER PRIMARY KEY, version INTEGER)")
             try ctx.exec(sql: "INSERT OR IGNORE INTO \(Self.schemaVersionTable) (id, version) VALUES (0, 0)")
-            return try ctx.query(sql: "SELECT version FROM \(Self.schemaVersionTable)").first?.first?.longValue ?? Int64(0)
+            return try ctx.selectAll(sql: "SELECT version FROM \(Self.schemaVersionTable)").first?.first?.longValue ?? Int64(0)
         }
     }
 
