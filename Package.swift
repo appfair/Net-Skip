@@ -2,11 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "net-skip-app",
+    name: "net-skip",
     defaultLocalization: "en",
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "NetSkipApp", type: .dynamic, targets: ["NetSkip"]),
+        .library(name: "NetSkipModel", type: .dynamic, targets: ["NetSkipModel"]),
     ],
     dependencies: [
         .package(url: "https://github.com/appfair/appfair-app.git", from: "1.0.0"),

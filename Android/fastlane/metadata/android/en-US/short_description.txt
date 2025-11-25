@@ -1,1 +1,1 @@
-A catalog of widgets for Skip apps
+A humane web browser
