@@ -267,7 +267,9 @@ import NetSkipModel
         }
         .padding(.horizontal, showBottomBar ? 6.0 : 0.0)
         .background(showBottomBar ? Color(white: 0.75, opacity: 0.1) : Color.clear)
+        #if !os(Android) // messes up the URL bar and causes it to be unresponsive
         .ignoresSafeArea([.container])
+        #endif
     }
 
     @ViewBuilder func suggestionsView() -> some View {
