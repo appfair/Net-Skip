@@ -1,20 +1,38 @@
 ## User settings
-xcuserdata/
+
+# vi
+.*.swp
+.*.swo
+
+# macOS
+.DS_Store
+
+# gradle properties
+local.properties
+.gradle/
+.android/
+.kotlin/
+Android/app/keystore.jks
+Android/app/keystore.properties
 
 xcodebuild*.log
 
-.gradle/
-.*.swp
-.*.swo
-.DS_Store
+default.profraw
+*.mobileprovision
+*.cer
+*.p12
+*.p12.password
 
-## compatibility with Xcode 8 and earlier (ignoring not required starting Xcode 9)
-*.xcscmblueprint
-*.xccheckout
-
-## compatibility with Xcode 3 and earlier (ignoring not required starting Xcode 4)
+# Xcode automatically generates this directory with a .xcworkspacedata file and xcuserdata
+# hence it is not needed unless you have added a package configuration file to your project
+.swiftpm
+.build/
 build/
 DerivedData/
+xcuserdata/
+xcodebuild*.log
+.idea/
+
 *.moved-aside
 *.pbxuser
 !default.pbxuser
@@ -24,6 +42,8 @@ DerivedData/
 !default.mode2v3
 *.perspectivev3
 !default.perspectivev3
+*.xcscmblueprint
+*.xccheckout
 
 ## Obj-C/Swift specific
 *.hmap
@@ -45,32 +65,7 @@ Package.pins
 Package.resolved
 #*.xcodeproj
 
-# Xcode automatically generates this directory with a .xcworkspacedata file and xcuserdata
-# hence it is not needed unless you have added a package configuration file to your project
-.swiftpm
-.build/
-
-# CocoaPods
-#
-# We recommend against adding the Pods directory to your .gitignore. However
-# you should judge for yourself, the pros and cons are mentioned at:
-# https://guides.cocoapods.org/using/using-cocoapods.html#should-i-check-the-pods-directory-into-source-control
-#
-# Pods/
-#
-# Add this line if you want to avoid checking in source code from the Xcode workspace
-# *.xcworkspace
-
-# Carthage
-#
-# Add this line if you want to avoid checking in source code from Carthage dependencies.
-# Carthage/Checkouts
-
 Carthage/Build/
-
-# Accio dependency management
-Dependencies/
-.accio/
 
 # fastlane
 
@@ -79,12 +74,3 @@ Dependencies/
 **/fastlane/README.md
 **/fastlane/Preview.html
 **/fastlane/test_output
-
-# Code Injection
-#
-# After new code Injection tools there's a generated folder /iOSInjectionProject
-# https://github.com/johnno1962/injectionforxcode
-
-iOSInjectionProject/
-
-
