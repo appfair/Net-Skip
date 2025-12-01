@@ -23,9 +23,18 @@ android {
         sourceCompatibility = JavaVersion.toVersion(libs.versions.jvm.get())
         targetCompatibility = JavaVersion.toVersion(libs.versions.jvm.get())
     }
+    packaging {
+        jniLibs {
+            keepDebugSymbols.add("**/*.so")
+            pickFirsts.add("**/*.so")
+            // this option will compress JNI .so files
+            useLegacyPackaging = true
+        }
+    }
 
     defaultConfig {
         minSdk = libs.versions.android.sdk.min.get().toInt()
+        targetSdk = libs.versions.android.sdk.compile.get().toInt()
         // skip.tools.skip-build-plugin will automatically use Skip.env properties for:
         // applicationId = PRODUCT_BUNDLE_IDENTIFIER
         // versionCode = CURRENT_PROJECT_VERSION
@@ -34,6 +43,10 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    lint {
+        disable.add("Instantiatable")
     }
 
     // default signing configuration tries to load from keystore.properties
