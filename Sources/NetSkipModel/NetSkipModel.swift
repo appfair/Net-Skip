@@ -84,7 +84,7 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
     static let schemaVersionTable = "schema_version"
 
     public init(url: URL?) throws {
-        self.ctx = try SQLContext(path: url?.path ?? ":memory:", flags: [.readWrite, .create]) // , configuration: .plus)
+        self.ctx = try SQLContext(path: url?.path ?? ":memory:", flags: [.readWrite, .create], configuration: .platform)
         ctx.trace { sql in
             logger.info("SQL: \(sql)")
         }
