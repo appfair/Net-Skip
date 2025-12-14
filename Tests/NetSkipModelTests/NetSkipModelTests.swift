@@ -23,7 +23,7 @@ final class NetSkipModelTests: XCTestCase {
     }
 
     func testNetSkipBrowserStore() throws {
-        let ctx = SQLContext() // in-memory context
+        let ctx = SQLContext(configuration: .platform) // in-memory context
         let store = try NetSkipWebBrowserStore(url: nil)
 
         XCTAssertEqual(0, try store.loadItems(type: .history, ids: []).count)
