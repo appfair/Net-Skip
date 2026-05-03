@@ -38,8 +38,24 @@ lane :release do |options|
   assemble
 
   upload_to_app_store(
-    api_key_path: "fastlane/apikey.json"
-    #app_rating_config_path: "fastlane/metadata/rating.json"
+    api_key_path: "fastlane/apikey.json",
+    #app_rating_config_path: "fastlane/metadata/rating.json",
+    submission_information: {
+      add_id_info_tracks_action: false,
+      add_id_info_tracks_install: false,
+      add_id_info_uses_idfa: false,
+      content_rights_has_rights: true,
+      content_rights_contains_third_party_content: false,
+      export_compliance_platform: 'ios',
+      export_compliance_compliance_required: false,
+      export_compliance_encryption_updated: false,
+      export_compliance_app_type: nil,
+      export_compliance_uses_encryption: true,
+      export_compliance_is_exempt: true,
+      export_compliance_contains_third_party_cryptography: false,
+      export_compliance_contains_proprietary_cryptography: false,
+      export_compliance_available_on_french_store: true
+    }
   )
 end
 
