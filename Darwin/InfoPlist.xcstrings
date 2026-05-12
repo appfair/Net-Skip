@@ -3,7 +3,6 @@
   "strings" : {
     "1Password Fill Browser Action" : {
       "comment" : "UTType description for 1Password browser fill action UTI",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "ar" : {
           "stringUnit" : {

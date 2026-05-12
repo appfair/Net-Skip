@@ -49,6 +49,10 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     @AppStorage("searchSuggestions") var searchSuggestions: Bool = true
     @AppStorage("userAgent") var userAgent: String = ""
     @AppStorage("blockAds") var blockAds: Bool = true
+    @AppStorage("blockTrackers") var blockTrackers: Bool = true
+    @AppStorage("blockCookieBanners") var blockCookieBanners: Bool = true
+    @AppStorage("contentBlockingWhitelistedDomains") var contentBlockingWhitelistedDomains: String = ""
+    @AppStorage("contentBlockingCustomBlockedPatterns") var contentBlockingCustomBlockedPatterns: String = ""
     @AppStorage("enableJavaScript") var enableJavaScript: Bool = true
     @AppStorage("requestDesktopSite") var requestDesktopSite: Bool = false
     @AppStorage("textZoom") var textZoom: Double = 1.0
@@ -65,6 +69,23 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     }
 
     public var body: some View {
+        #if SKIP
+        // On Android the navigation bar is hidden (no title or items), and SkipUI does
+        // not always inset the top edge by the system status bar — content can otherwise
+        // draw under the status/camera area. Use the GeometryReader's unconsumed top
+        // inset to push content down. If SkipUI later starts insetting automatically,
+        // the inset reported here will be 0 and this becomes a no-op.
+        GeometryReader { proxy in
+            bodyContent
+                .padding(.top, proxy.safeAreaInsets.top)
+        }
+        #else
+        bodyContent
+        #endif
+    }
+
+    @ViewBuilder
+    private var bodyContent: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 browserTabView()
@@ -98,6 +119,28 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         .sheet(isPresented: $showFavorites) { favoritesPageInfoView() }
         .sheet(isPresented: $showActiveTabs) { activeTabsView() }
         .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
+        .onChange(of: blockAds, initial: false) { _, _ in applyContentBlockingSettings() }
+        .onChange(of: blockTrackers, initial: false) { _, _ in applyContentBlockingSettings() }
+        .onChange(of: blockCookieBanners, initial: false) { _, _ in applyContentBlockingSettings() }
+        .onChange(of: contentBlockingWhitelistedDomains, initial: false) { _, _ in applyContentBlockingSettings() }
+        .onChange(of: contentBlockingCustomBlockedPatterns, initial: false) { _, _ in applyContentBlockingSettings() }
+    }
+
+    /// Apply content-blocker settings to the shared `WebEngineConfiguration` and
+    /// trigger an iOS rule-list reinstall on each open tab. The Android blocker
+    /// reads `UserDefaults` dynamically, so its changes apply on the next request
+    /// without further work here.
+    func applyContentBlockingSettings() {
+        configuration.contentBlockers = netSkipMakeContentBlockerConfiguration(provider: ContentView.adBlockProvider)
+        #if !SKIP
+        Task { @MainActor in
+            for tab in tabs {
+                if let engine = tab.navigator.webEngine {
+                    _ = await engine.reapplyContentBlockers()
+                }
+            }
+        }
+        #endif
     }
 
     var toolbarPlacement: ToolbarItemPlacement {
@@ -159,7 +202,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     }
 
     func settingsView() -> some View {
-        SettingsView(configuration: configuration, store: store, appearance: $appearance, buttonHaptics: $buttonHaptics, pageLoadHaptics: $pageLoadHaptics, searchEngine: $searchEngine, searchSuggestions: $searchSuggestions, userAgent: $userAgent, enableJavaScript: $enableJavaScript, enableMiniApps: $enableMiniApps)
+        SettingsView(configuration: configuration, store: store, appearance: $appearance, buttonHaptics: $buttonHaptics, pageLoadHaptics: $pageLoadHaptics, searchEngine: $searchEngine, searchSuggestions: $searchSuggestions, userAgent: $userAgent, enableJavaScript: $enableJavaScript, enableMiniApps: $enableMiniApps, blockAds: $blockAds, blockTrackers: $blockTrackers, blockCookieBanners: $blockCookieBanners, contentBlockingWhitelistedDomains: $contentBlockingWhitelistedDomains, contentBlockingCustomBlockedPatterns: $contentBlockingCustomBlockedPatterns)
             #if !SKIP
             .environment(\.openURL, openURLAction(newTab: true))
             #endif
