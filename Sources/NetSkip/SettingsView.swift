@@ -20,6 +20,11 @@ struct SettingsView : View {
     @Binding var userAgent: String
     @Binding var enableJavaScript: Bool
     @Binding var enableMiniApps: Bool
+    @Binding var blockAds: Bool
+    @Binding var blockTrackers: Bool
+    @Binding var blockCookieBanners: Bool
+    @Binding var contentBlockingWhitelistedDomains: String
+    @Binding var contentBlockingCustomBlockedPatterns: String
 
     @State var confirmClearHistory: Bool = false
     @State var confirmClearFavorites: Bool = false
@@ -65,12 +70,66 @@ struct SettingsView : View {
                 Toggle(isOn: $enableJavaScript, label: {
                     Text("Enable JavaScript", bundle: .module, comment: "settings toggle label for enabling JavaScript")
                 })
-                HStack {
-                    Text("Ad & Tracker Blocking", bundle: .module, comment: "settings label for content blocking status")
-                    Spacer()
-                    Text("On", bundle: .module, comment: "content blocking enabled label")
-                        .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle(isOn: $blockAds, label: {
+                    Label {
+                        Text("Block Ads", bundle: .module, comment: "settings toggle label for blocking ads")
+                    } icon: {
+                        Image("shield", bundle: .module)
+                    }
+                })
+                Toggle(isOn: $blockTrackers, label: {
+                    Label {
+                        Text("Block Trackers", bundle: .module, comment: "settings toggle label for blocking trackers")
+                    } icon: {
+                        Image("block", bundle: .module)
+                    }
+                })
+                Toggle(isOn: $blockCookieBanners, label: {
+                    Label {
+                        Text("Block Cookie Banners", bundle: .module, comment: "settings toggle label for blocking cookie consent banners")
+                    } icon: {
+                        Image("rule", bundle: .module)
+                    }
+                })
+
+                NavigationLink {
+                    NetSkipDomainListEditor(
+                        title: Text("Allowed Sites", bundle: .module, comment: "title for the whitelisted sites editor"),
+                        descriptionText: Text("Sites listed here bypass content blocking. Use bare domains like example.com or wildcards like *.example.com.", bundle: .module, comment: "description for whitelisted sites editor"),
+                        prompt: Text("example.com", bundle: .module, comment: "placeholder for entering a whitelisted domain"),
+                        emptyMessage: Text("No allowed sites yet.", bundle: .module, comment: "empty state for the whitelisted sites editor"),
+                        rawText: $contentBlockingWhitelistedDomains
+                    )
+                } label: {
+                    Label {
+                        Text("Allowed Sites", bundle: .module, comment: "settings row label for the whitelisted sites editor")
+                    } icon: {
+                        Image("public", bundle: .module)
+                    }
                 }
+
+                NavigationLink {
+                    NetSkipDomainListEditor(
+                        title: Text("Custom Block Rules", bundle: .module, comment: "title for the custom blocked patterns editor"),
+                        descriptionText: Text("Block any request whose URL contains one of these substrings. Example: tracker.example.com or /analytics/.", bundle: .module, comment: "description for custom blocked patterns editor"),
+                        prompt: Text("tracker.example.com", bundle: .module, comment: "placeholder for entering a custom blocked pattern"),
+                        emptyMessage: Text("No custom rules yet.", bundle: .module, comment: "empty state for the custom blocked patterns editor"),
+                        rawText: $contentBlockingCustomBlockedPatterns
+                    )
+                } label: {
+                    Label {
+                        Text("Custom Block Rules", bundle: .module, comment: "settings row label for the custom blocked patterns editor")
+                    } icon: {
+                        Image("rule", bundle: .module)
+                    }
+                }
+            } header: {
+                Text("Content Blocking", bundle: .module, comment: "settings header for content blocking customization")
+            } footer: {
+                Text("Changes to content blocking apply on the next page load.", bundle: .module, comment: "settings footer explaining when content blocking changes take effect")
             }
 
             Section("Experimental") {

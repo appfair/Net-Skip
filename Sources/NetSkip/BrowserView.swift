@@ -23,6 +23,9 @@ import NetSkipModel
 
     @State var currentSuggestions: SearchSuggestions?
     @State var triggerPageLoadHaptic: Bool = false
+    #if SKIP
+    @State var urlSelection: TextSelection? = nil
+    #endif
 
     @FocusState var isURLBarFocused: Bool
 
@@ -37,7 +40,6 @@ import NetSkipModel
 
     var body: some View {
         VStack(spacing: 0.0) {
-            urlBarView()
             ZStack {
                 WebView(configuration: configuration, navigator: viewModel.navigator, state: $viewModel.state, onNavigationCommitted: {
                     logger.log("onNavigationCommitted")
@@ -48,6 +50,7 @@ import NetSkipModel
                         .frame(maxHeight: .infinity)
                 }
             }
+            urlBarView()
         }
         .frame(maxHeight: .infinity)
         #if !SKIP
@@ -142,10 +145,10 @@ import NetSkipModel
 
     func urlBarView() -> some View {
         VStack(spacing: 0.0) {
-            urlBarComponentView()
             if showBottomBar {
                 Divider()
             }
+            urlBarComponentView()
         }
             #if !SKIP
             .onChange(of: state.pageURL, updatePageURL)
@@ -172,6 +175,20 @@ import NetSkipModel
         return host
     }
 
+    /// The URL bar TextField. The Skip variant binds `selection` so we can
+    /// programmatically select-all-on-focus to mirror iOS UITextField behavior.
+    @ViewBuilder func urlTextFieldView() -> some View {
+        #if SKIP
+        TextField(text: $viewModel.urlTextField, selection: $urlSelection) {
+            Text(isURLBarFocused ? "Search or enter website name" : "")
+        }
+        #else
+        TextField(text: $viewModel.urlTextField) {
+            Text(isURLBarFocused ? "Search or enter website name" : "")
+        }
+        #endif
+    }
+
     @ViewBuilder func urlBarComponentView() -> some View {
         ZStack(alignment: .center) {
             // Background capsule with progress bar
@@ -195,9 +212,7 @@ import NetSkipModel
             // domain overlay is visible instead. We do NOT use
             // .opacity(0) because iOS skips hit testing for invisible views.
             HStack(spacing: 6) {
-                TextField(text: $viewModel.urlTextField) {
-                    Text(isURLBarFocused ? "Search or enter website name" : "")
-                }
+                urlTextFieldView()
                 .textFieldStyle(.plain)
                 .font(.system(size: isURLBarFocused ? 16.0 : 15.0))
                 .foregroundStyle(isURLBarFocused ? Color.primary : Color.clear)
@@ -219,6 +234,13 @@ import NetSkipModel
                 .onChange(of: isURLBarFocused) { _, newValue in
                     if newValue {
                         showBottomBar = true
+                        #if SKIP
+                        // Pre-select all text in URL bar when focused (mirrors iOS UITextField.selectAll behavior)
+                        let text = viewModel.urlTextField
+                        if !text.isEmpty {
+                            urlSelection = TextSelection(range: text.startIndex..<text.endIndex)
+                        }
+                        #endif
                     }
                 }
                 .onSubmit {
