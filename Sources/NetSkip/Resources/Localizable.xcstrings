@@ -169,6 +169,7 @@
     },
     "Ad & Tracker Blocking" : {
       "comment" : "settings label for content blocking status",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -243,6 +244,9 @@
           }
         }
       }
+    },
+    "Add" : {
+      "comment" : "section header for adding a new content-blocking entry"
     },
     "Add to Favorites" : {
       "comment" : "add to favorites button label",
@@ -320,6 +324,9 @@
           }
         }
       }
+    },
+    "Allowed Sites" : {
+      "comment" : "settings row label for the whitelisted sites editor\ntitle for the whitelisted sites editor"
     },
     "Appearance" : {
       "comment" : "settings appearance picker label",
@@ -706,6 +713,18 @@
         }
       }
     },
+    "Block Ads" : {
+      "comment" : "settings toggle label for blocking ads"
+    },
+    "Block any request whose URL contains one of these substrings. Example: tracker.example.com or /analytics/." : {
+      "comment" : "description for custom blocked patterns editor"
+    },
+    "Block Cookie Banners" : {
+      "comment" : "settings toggle label for blocking cookie consent banners"
+    },
+    "Block Trackers" : {
+      "comment" : "settings toggle label for blocking trackers"
+    },
     "Bookmarks" : {
       "comment" : "bookmarks button label\nbookmarks menu label",
       "localizations" : {
@@ -859,6 +878,9 @@
           }
         }
       }
+    },
+    "Changes to content blocking apply on the next page load." : {
+      "comment" : "settings footer explaining when content blocking changes take effect"
     },
     "Clear All Browsing Data" : {
       "comment" : "settings button to clear all data",
@@ -1553,6 +1575,12 @@
         }
       }
     },
+    "Content Blocking" : {
+      "comment" : "settings header for content blocking customization"
+    },
+    "Custom Block Rules" : {
+      "comment" : "settings row label for the custom blocked patterns editor\ntitle for the custom blocked patterns editor"
+    },
     "Dark" : {
       "comment" : "settings appearance system label",
       "localizations" : {
@@ -2245,6 +2273,12 @@
           }
         }
       }
+    },
+    "Entries" : {
+      "comment" : "section header for the list of content-blocking entries"
+    },
+    "example.com" : {
+      "comment" : "placeholder for entering a whitelisted domain"
     },
     "Experimental" : {
       "comment" : "settings section header for experimental features",
@@ -3632,6 +3666,9 @@
         }
       }
     },
+    "New Entry" : {
+      "comment" : "accessibility label for the new content-blocking entry field"
+    },
     "New Tab" : {
       "comment" : "new tab button label",
       "localizations" : {
@@ -3708,6 +3745,12 @@
           }
         }
       }
+    },
+    "No allowed sites yet." : {
+      "comment" : "empty state for the whitelisted sites editor"
+    },
+    "No custom rules yet." : {
+      "comment" : "empty state for the custom blocked patterns editor"
     },
     "No Items" : {
       "comment" : "sheet placeholder text when there are no items available",
@@ -3788,6 +3831,7 @@
     },
     "On" : {
       "comment" : "content blocking enabled label",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -4941,6 +4985,9 @@
         }
       }
     },
+    "Sites listed here bypass content blocking. Use bare domains like example.com or wildcards like *.example.com." : {
+      "comment" : "description for whitelisted sites editor"
+    },
     "StartPage" : {
       "comment" : "search engine name for StartPage",
       "localizations" : {
@@ -5248,6 +5295,9 @@
           }
         }
       }
+    },
+    "tracker.example.com" : {
+      "comment" : "placeholder for entering a custom blocked pattern"
     },
     "Yahoo!" : {
       "comment" : "search engine name for Yahoo",
