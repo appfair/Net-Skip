@@ -48,16 +48,16 @@ public struct PageInfo : Identifiable {
 }
 
 /// The configuration for a search engine
-public struct SearchEngine : Identifiable {
+public struct SearchEngine : Identifiable, Sendable {
     public typealias ID = String
 
     public let id: ID
     public let homeURL: String
-    public let name: () -> String
-    public let queryURL: (String, String) -> String?
-    public let suggestions: (String) async throws -> [String]?
+    public let name: @Sendable () -> String
+    public let queryURL: @Sendable (String, String) -> String?
+    public let suggestions: @Sendable (String) async throws -> [String]?
 
-    public init(id: String, homeURL: String, name: @escaping () -> String, queryURL: @escaping (String, String) -> String?, suggestions: @escaping (String) async throws -> [String]?) {
+    public init(id: String, homeURL: String, name: @Sendable @escaping () -> String, queryURL: @Sendable @escaping (String, String) -> String?, suggestions: @Sendable @escaping (String) async throws -> [String]?) {
         self.id = id
         self.homeURL = homeURL
         self.name = name

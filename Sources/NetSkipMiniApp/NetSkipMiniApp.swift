@@ -24,7 +24,7 @@ public struct MiniAppCatalogEntry: Identifiable {
 }
 
 /// The built-in sample miniapps bundled with the app.
-public let sampleMiniApps: [MiniAppCatalogEntry] = [
+nonisolated(unsafe) public let sampleMiniApps: [MiniAppCatalogEntry] = [
     MiniAppCatalogEntry(
         id: "showcase-demo",
         name: "Showcase Demo",
