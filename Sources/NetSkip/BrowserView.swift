@@ -216,6 +216,7 @@ import NetSkipModel
                 .textFieldStyle(.plain)
                 .font(.system(size: isURLBarFocused ? 16.0 : 15.0))
                 .foregroundStyle(isURLBarFocused ? Color.primary : Color.clear)
+                .accessibilityIdentifier("field.url")
                 #if !SKIP
                 #if os(iOS)
                 .keyboardType(.webSearch)
@@ -223,10 +224,13 @@ import NetSkipModel
                 .autocorrectionDisabled(true)
                 .textInputAutocapitalization(.never)
                 .multilineTextAlignment(isURLBarFocused ? .leading : .center)
+                // Select-all on focus, mirroring UITextField.selectAll behavior.
+                // Listen only while the bar is focused so we don't selectAll on every
+                // UITextField in the app (e.g. the Find-on-page bar) — that broad
+                // notification trigger was causing focus-state glitches.
                 .onReceive(NotificationCenter.default.publisher(for: UITextField.textDidBeginEditingNotification)) { obj in
-                    if let textField = obj.object as? UITextField {
-                        textField.selectAll(nil)
-                    }
+                    guard isURLBarFocused, let textField = obj.object as? UITextField else { return }
+                    textField.selectAll(nil)
                 }
                 #endif
                 #endif
@@ -323,25 +327,40 @@ import NetSkipModel
 
     @ViewBuilder func suggestionsView() -> some View {
         VStack(spacing: 0) {
-            // Top bar with cancel
-            HStack {
-                Spacer()
-                Button(action: {
-                    withAnimation {
+            // Top bar with Cancel — only show when the URL bar is actually focused,
+            // so the button has a meaningful effect. On a new tab with no page loaded
+            // (state.pageURL == nil), the suggestionsView is visible by default; showing
+            // Cancel there would be non-functional because there's nothing to cancel.
+            if isURLBarFocused {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        // Defocus the URL bar (dismisses keyboard) and clear any in-flight
+                        // search suggestions so the dropdown collapses immediately. Also
+                        // restore the URL bar text to the current page URL (or clear it
+                        // for a new tab) so the user's in-progress edit is discarded.
                         self.isURLBarFocused = false
-                    }
-                }, label: {
-                    Text("Cancel", bundle: .module, comment: "cancel button for dismissing suggestions")
-                        .fontWeight(.medium)
-                })
-                .buttonStyle(.plain)
-                .padding(.trailing, 16)
-                .padding(.top, 12)
+                        self.currentSuggestions = nil
+                        self.viewModel.urlTextField = state.pageURL ?? ""
+                    }, label: {
+                        Text("Cancel", bundle: .module, comment: "cancel button for dismissing suggestions")
+                            .fontWeight(.medium)
+                    })
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 16)
+                    .padding(.top, 12)
+                }
             }
 
-            if let suggestions = currentSuggestions, !suggestions.suggestions.isEmpty {
+            // Filter out any suggestion that exactly matches what's already in the URL bar.
+            // The search engine often echoes the typed URL back as a suggestion, producing a
+            // visual "duplicate URL bar" effect (the suggestion row at the top looks identical
+            // to the URL bar at the bottom).
+            let typed = viewModel.urlTextField
+            let filteredSuggestions = (currentSuggestions?.suggestions ?? []).filter { $0 != typed }
+            if !filteredSuggestions.isEmpty {
                 List {
-                    ForEach(Array(suggestions.suggestions.enumerated()), id: \.0) { (index, suggestion) in
+                    ForEach(Array(filteredSuggestions.enumerated()), id: \.0) { (index, suggestion) in
                         Button {
                             withAnimation {
                                 self.submitURL(suggestion)

@@ -69,19 +69,9 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     }
 
     public var body: some View {
-        #if SKIP
-        // On Android the navigation bar is hidden (no title or items), and SkipUI does
-        // not always inset the top edge by the system status bar — content can otherwise
-        // draw under the status/camera area. Use the GeometryReader's unconsumed top
-        // inset to push content down. If SkipUI later starts insetting automatically,
-        // the inset reported here will be 0 and this becomes a no-op.
-        GeometryReader { proxy in
-            bodyContent
-                .padding(.top, proxy.safeAreaInsets.top)
-        }
-        #else
+        // SkipUI insets the top edge by the system status bar automatically on Android
+        // (matching iOS), so no manual safe-area padding is needed here.
         bodyContent
-        #endif
     }
 
     @ViewBuilder
