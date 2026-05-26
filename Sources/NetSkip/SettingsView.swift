@@ -42,13 +42,16 @@ struct SettingsView : View {
                 } label: {
                     Text("Appearance", bundle: .module, comment: "settings appearance picker label")
                 }
+                .accessibilityIdentifier("picker.appearance")
 
                 Toggle(isOn: $buttonHaptics, label: {
                     Text("Haptic Feedback", bundle: .module, comment: "settings toggle label for button haptic feedback")
                 })
+                .accessibilityIdentifier("toggle.haptics")
                 Toggle(isOn: $pageLoadHaptics, label: {
                     Text("Page Load Haptics", bundle: .module, comment: "settings toggle label for page load haptic feedback")
                 })
+                .accessibilityIdentifier("toggle.pageLoadHaptics")
             }
 
             Section {
@@ -60,16 +63,19 @@ struct SettingsView : View {
                 } label: {
                     Text("Search Engine", bundle: .module, comment: "settings picker label for the default search engine")
                 }
+                .accessibilityIdentifier("picker.searchEngine")
 
                 Toggle(isOn: $searchSuggestions, label: {
                     Text("Search Suggestions", bundle: .module, comment: "settings toggle label for previewing search suggestions")
                 })
+                .accessibilityIdentifier("toggle.searchSuggestions")
             }
 
             Section("Privacy") {
                 Toggle(isOn: $enableJavaScript, label: {
                     Text("Enable JavaScript", bundle: .module, comment: "settings toggle label for enabling JavaScript")
                 })
+                .accessibilityIdentifier("toggle.javascript")
             }
 
             Section {
@@ -80,6 +86,7 @@ struct SettingsView : View {
                         Image("shield", bundle: .module)
                     }
                 })
+                .accessibilityIdentifier("toggle.blockAds")
                 Toggle(isOn: $blockTrackers, label: {
                     Label {
                         Text("Block Trackers", bundle: .module, comment: "settings toggle label for blocking trackers")
@@ -87,6 +94,7 @@ struct SettingsView : View {
                         Image("block", bundle: .module)
                     }
                 })
+                .accessibilityIdentifier("toggle.blockTrackers")
                 Toggle(isOn: $blockCookieBanners, label: {
                     Label {
                         Text("Block Cookie Banners", bundle: .module, comment: "settings toggle label for blocking cookie consent banners")
@@ -94,6 +102,7 @@ struct SettingsView : View {
                         Image("rule", bundle: .module)
                     }
                 })
+                .accessibilityIdentifier("toggle.blockCookieBanners")
 
                 NavigationLink {
                     NetSkipDomainListEditor(
@@ -110,6 +119,7 @@ struct SettingsView : View {
                         Image("public", bundle: .module)
                     }
                 }
+                .accessibilityIdentifier("link.allowedSites")
 
                 NavigationLink {
                     NetSkipDomainListEditor(
@@ -126,6 +136,7 @@ struct SettingsView : View {
                         Image("rule", bundle: .module)
                     }
                 }
+                .accessibilityIdentifier("link.customBlockRules")
             } header: {
                 Text("Content Blocking", bundle: .module, comment: "settings header for content blocking customization")
             } footer: {
@@ -136,6 +147,7 @@ struct SettingsView : View {
                 Toggle(isOn: $enableMiniApps, label: {
                     Text("MiniApps", bundle: .module, comment: "settings toggle label for enabling miniapps experimental feature")
                 })
+                .accessibilityIdentifier("toggle.miniApps")
             }
 
             Section("Data") {
@@ -144,6 +156,7 @@ struct SettingsView : View {
                 } label: {
                     Text("Clear History", bundle: .module, comment: "settings button to clear browsing history")
                 }
+                .accessibilityIdentifier("button.clearHistory")
                 .confirmationDialog("Clear all browsing history?", isPresented: $confirmClearHistory) {
                     Button("Clear History", role: .destructive) {
                         trying { try store?.removeItems(type: .history, ids: []) }
@@ -155,6 +168,7 @@ struct SettingsView : View {
                 } label: {
                     Text("Clear Favorites", bundle: .module, comment: "settings button to clear favorites")
                 }
+                .accessibilityIdentifier("button.clearFavorites")
                 .confirmationDialog("Clear all favorites?", isPresented: $confirmClearFavorites) {
                     Button("Clear Favorites", role: .destructive) {
                         trying { try store?.removeItems(type: .favorite, ids: []) }
@@ -166,6 +180,7 @@ struct SettingsView : View {
                 } label: {
                     Text("Clear All Browsing Data", bundle: .module, comment: "settings button to clear all data")
                 }
+                .accessibilityIdentifier("button.clearAllData")
                 .confirmationDialog("Clear all browsing data including history, favorites, and open tabs?", isPresented: $confirmClearAll) {
                     Button("Clear All Data", role: .destructive) {
                         trying {
@@ -204,6 +219,7 @@ struct SettingsView : View {
                     } label: {
                         Text("About \(appName) \(appVersion)", bundle: .module, comment: "settings title menu for about app in the form ”About APP_NAME APP_VERSION”")
                     }
+                    .accessibilityIdentifier("link.about")
                 }
             }
         }
@@ -220,6 +236,7 @@ struct SettingsView : View {
                         .bold()
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("button.settings.done")
             }
         }
     }

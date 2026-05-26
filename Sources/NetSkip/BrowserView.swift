@@ -272,6 +272,8 @@ import NetSkipModel
                             #endif
                     })
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("button.url.clear")
+                    .accessibilityLabel(Text("Clear URL", bundle: .module, comment: "accessibility label for the URL bar clear button"))
                 } else if state.isLoading {
                     // Stop loading button
                     Button(action: { self.viewModel.navigator.stopLoading() }, label: {
@@ -280,6 +282,8 @@ import NetSkipModel
                             .foregroundStyle(.secondary)
                     })
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("button.url.stop")
+                    .accessibilityLabel(Text("Stop loading", bundle: .module, comment: "accessibility label for the URL bar stop-loading button"))
                 } else if state.pageURL != nil {
                     // Reload button
                     Button(action: { self.viewModel.navigator.reload() }, label: {
@@ -288,6 +292,8 @@ import NetSkipModel
                             .foregroundStyle(.secondary)
                     })
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("button.url.reload")
+                    .accessibilityLabel(Text("Reload page", bundle: .module, comment: "accessibility label for the URL bar reload button"))
                 }
             }
             .padding(.horizontal, 12.0)
@@ -347,6 +353,7 @@ import NetSkipModel
                             .fontWeight(.medium)
                     })
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("button.url.cancel")
                     .padding(.trailing, 16)
                     .padding(.top, 12)
                 }

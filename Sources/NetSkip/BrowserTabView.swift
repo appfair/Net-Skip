@@ -337,6 +337,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                         }) {
                             Image("plus", bundle: .module)
                         }
+                        .accessibilityIdentifier("button.tabs.new")
+                        .accessibilityLabel(Text("New Tab", bundle: .module, comment: "accessibility label for the new-tab toolbar button in the tab overview"))
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -346,6 +348,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                         Text("Done", bundle: .module, comment: "done button title")
                             .bold()
                     }
+                    .accessibilityIdentifier("button.tabs.done")
                 }
             }
         }
@@ -521,6 +524,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                             .foregroundStyle(Color.white.opacity(0.6))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("button.tab.close")
+                    .accessibilityLabel(Text("Close tab", bundle: .module, comment: "accessibility label for closing an individual tab from the tab overview"))
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
@@ -716,6 +721,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 backLabel
             }
             .disabled(!enabled)
+            .accessibilityIdentifier("button.back")
         } else {
             Menu {
                 backHistoryMenu()
@@ -745,6 +751,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 forwardLabel
             }
             .disabled(!enabled)
+            .accessibilityIdentifier("button.forward")
         } else {
             Menu {
                 forwardHistoryMenu()
@@ -779,6 +786,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     Image("plus", bundle: .module)
                 }
             }
+            .accessibilityIdentifier("menu.newTab")
 
             Button(action: closeTabAction) {
                 Label {
@@ -787,6 +795,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     Image("xmark", bundle: .module)
                 }
             }
+            .accessibilityIdentifier("menu.closeTab")
         } label: {
             Label {
                 Text("Tabs", bundle: .module, comment: "tabs button label")
@@ -815,6 +824,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 .padding(.vertical, 6)
                 .background(Color.gray.opacity(0.15))
                 .cornerRadius(8)
+                .accessibilityIdentifier("field.findOnPage")
 
             Button(action: {
                 executeFindOnPage(findText)
@@ -824,6 +834,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             }
             .buttonStyle(.plain)
             .disabled(findText.isEmpty)
+            .accessibilityIdentifier("button.findOnPage.search")
+            .accessibilityLabel(Text("Find", bundle: .module, comment: "accessibility label for the find-on-page search button"))
 
             Button(action: {
                 clearFindHighlights()
@@ -834,6 +846,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("button.findOnPage.close")
+            .accessibilityLabel(Text("Close find on page", bundle: .module, comment: "accessibility label for the find-on-page close button"))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -856,6 +870,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 }
                 .buttonStyle(.plain)
                 .disabled(textZoom <= 0.5)
+                .accessibilityIdentifier("button.zoom.decrease")
+                .accessibilityLabel(Text("Decrease text size", bundle: .module, comment: "accessibility label for the page-zoom decrease button"))
 
                 // Current zoom percentage (tap to reset to 100%)
                 Button(action: {
@@ -868,6 +884,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                         .frame(width: 56, height: 36)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("button.zoom.reset")
+                .accessibilityLabel(Text("Reset text size", bundle: .module, comment: "accessibility label for the page-zoom reset button (tap to return to 100%)"))
 
                 // Increase zoom button (large A)
                 Button(action: {
@@ -880,6 +898,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 }
                 .buttonStyle(.plain)
                 .disabled(textZoom >= 3.0)
+                .accessibilityIdentifier("button.zoom.increase")
+                .accessibilityLabel(Text("Increase text size", bundle: .module, comment: "accessibility label for the page-zoom increase button"))
             }
             .background(Color.gray.opacity(0.15))
             .cornerRadius(8)
@@ -896,6 +916,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             }
             .buttonStyle(.plain)
             .padding(.leading, 8)
+            .accessibilityIdentifier("button.zoom.dismiss")
+            .accessibilityLabel(Text("Close page zoom", bundle: .module, comment: "accessibility label for the page-zoom dismiss button"))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -956,6 +978,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     Image("arrow.clockwise", bundle: .module)
                 }
             }
+            .accessibilityIdentifier("menu.reload")
 
             Button(action: homeAction) {
                 Label {
@@ -964,6 +987,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     Image("house", bundle: .module)
                 }
             }
+            .accessibilityIdentifier("menu.home")
 
             Button(action: findOnPageAction) {
                 Label {
@@ -972,6 +996,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     Image("magnifyingglass", bundle: .module)
                 }
             }
+            .accessibilityIdentifier("menu.findOnPage")
 
             Divider()
 
@@ -982,6 +1007,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     Image("star", bundle: .module)
                 }
             }
+            .accessibilityIdentifier("menu.addFavorite")
 
             ShareLink(item: currentState?.pageURL ?? fallbackURL) {
                 Label {
@@ -990,6 +1016,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     Image("ios_share", bundle: .module)
                 }
             }
+            .accessibilityIdentifier("menu.share")
 
             Divider()
 
@@ -1000,6 +1027,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     Image("book", bundle: .module)
                 }
             }
+            .accessibilityIdentifier("menu.bookmarks")
 
             Button(action: historyAction) {
                 Label {
@@ -1008,6 +1036,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     Image("history", bundle: .module)
                 }
             }
+            .accessibilityIdentifier("menu.history")
 
             Divider()
 
@@ -1018,6 +1047,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     Image("textformat.size", bundle: .module)
                 }
             }
+            .accessibilityIdentifier("menu.pageZoom")
 
             Button(action: toggleDesktopSiteAction) {
                 Label {
@@ -1026,6 +1056,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     Image(requestDesktopSite ? "smartphone" : "computer", bundle: .module)
                 }
             }
+            .accessibilityIdentifier("menu.desktopSite")
 
             Divider()
 
@@ -1036,6 +1067,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     Image("gearshape", bundle: .module)
                 }
             }
+            .accessibilityIdentifier("menu.settings")
         } label: {
             Label {
                 Text("Menu", bundle: .module, comment: "hamburger menu label")
