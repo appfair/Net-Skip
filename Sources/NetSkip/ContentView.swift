@@ -21,19 +21,18 @@ public struct ContentView: View {
     #endif
     let store = try! NetSkipWebBrowserStore(url: URL.documentsDirectory.appendingPathComponent("netskip.sqlite"))
 
+    @State private var settings = NetSkipSettings()
+
     public init() {
     }
 
     public var body: some View {
-        NavigationStack {
-            #if SKIP || os(iOS)
-            BrowserTabView(configuration: config, store: store)
-                #if SKIP
-                .toolbar(.hidden, for: .navigationBar)
-                #endif
-            #else
-            Text("Net Skip requires iOS")
-            #endif
-        }
+        #if SKIP || os(iOS)
+        BrowserTabView(configuration: config, store: store)
+            .environment(settings)
+        #else
+        Text("Net Skip requires iOS")
+            .environment(settings)
+        #endif
     }
 }

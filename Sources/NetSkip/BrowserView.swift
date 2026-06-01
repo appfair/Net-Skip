@@ -11,21 +11,18 @@ import NetSkipModel
     let submitURL: (String) -> ()
     @Binding var viewModel: BrowserViewModel
 
-    @Binding var searchEngine: SearchEngine.ID
-    @Binding var searchSuggestions: Bool
     @Binding var showSettings: Bool
     @Binding var showBottomBar: Bool
-    @Binding var userAgent: String
-    @Binding var enableJavaScript: Bool
-    @Binding var pageLoadHaptics: Bool
-    @Binding var requestDesktopSite: Bool
-    @Binding var textZoom: Double
 
     @State var currentSuggestions: SearchSuggestions?
     @State var triggerPageLoadHaptic: Bool = false
+    @State var pendingDownload: WebDownloadRequest? = nil
+    @State var showDownloadPrompt: Bool = false
     #if SKIP
     @State var urlSelection: TextSelection? = nil
     #endif
+
+    @Environment(NetSkipSettings.self) var settings
 
     @FocusState var isURLBarFocused: Bool
 
@@ -38,11 +35,41 @@ import NetSkipModel
         self.viewModel.navigator.webEngine?.webView
     }
 
+    /// The display name shown in the download confirmation dialog — runs
+    /// the same `resolvedFilename(for:)` correction the manager will use
+    /// so the prompt matches the actual saved filename (e.g. Android's
+    /// `appindex.bin` → `appindex.json`).
+    var pendingDownloadDisplayName: String {
+        if let request = pendingDownload {
+            return NetSkipDownloadManager.resolvedFilename(for: request)
+        }
+        return "file"
+    }
+
     var body: some View {
-        VStack(spacing: 0.0) {
+        // Total height of the bottom chrome (URL bar + toolbar) — the
+        // WebView is padded by this amount so its scroll content stops
+        // exactly where the chrome begins. On scroll-down the chrome
+        // collapses to zero, the padding follows, and the WebView
+        // takes over the full screen.
+        let chromeHeight = showBottomBar
+            ? (BrowserTabView.urlBarHeight + BrowserTabView.bottomToolbarHeight)
+            : 0.0
+
+        ZStack(alignment: .bottom) {
             ZStack {
                 WebView(configuration: configuration, navigator: viewModel.navigator, state: $viewModel.state, onNavigationCommitted: {
                     logger.log("onNavigationCommitted")
+                }, onDownloadRequested: { request in
+                    logger.log("download requested: \(String(describing: request.url))")
+                    Task { @MainActor in
+                        if settings.promptForDownloads {
+                            self.pendingDownload = request
+                            self.showDownloadPrompt = true
+                        } else {
+                            NetSkipDownloadManager.shared.enqueue(request)
+                        }
+                    }
                 })
                 let showSuggestions = state.pageURL == nil || isURLBarFocused
                 if showSuggestions {
@@ -50,18 +77,55 @@ import NetSkipModel
                         .frame(maxHeight: .infinity)
                 }
             }
+            // Reserve space at the bottom for the chrome (URL bar +
+            // toolbar). The WebView's scroll area ends here, so page
+            // content (including the very last line on long pages) is
+            // never hidden behind the chrome. Animated transition makes
+            // it slide smoothly when scrolling toggles the chrome.
+            .padding(.bottom, chromeHeight)
+
+            // URL bar overlay sitting flush against the toolbar. The
+            // bottom-padding lifts it by `bottomToolbarHeight` so its
+            // bottom edge touches the toolbar's top edge.
             urlBarView()
+                .frame(height: showBottomBar ? BrowserTabView.urlBarHeight : 0.0)
+                .opacity(showBottomBar ? 1.0 : 0.0)
+                .clipped()
+                .padding(.bottom, showBottomBar ? BrowserTabView.bottomToolbarHeight : 0.0)
         }
         .frame(maxHeight: .infinity)
+        .confirmationDialog(
+            Text("Download \(pendingDownloadDisplayName)?",
+                 bundle: .module,
+                 comment: "title for the file-download confirmation dialog; argument is the filename"),
+            isPresented: $showDownloadPrompt,
+            titleVisibility: .visible
+        ) {
+            Button {
+                if let request = pendingDownload {
+                    NetSkipDownloadManager.shared.enqueue(request)
+                }
+                pendingDownload = nil
+            } label: {
+                Text("Download", bundle: .module, comment: "confirm-download button on the download confirmation dialog")
+            }
+            .accessibilityIdentifier("button.download.confirm")
+            Button(role: .cancel) {
+                pendingDownload = nil
+            } label: {
+                Text("Cancel", bundle: .module, comment: "cancel button on the download confirmation dialog")
+            }
+            .accessibilityIdentifier("button.download.cancel")
+        }
         #if !SKIP
         .sensoryFeedback(.impact, trigger: triggerPageLoadHaptic)
         #endif
         .onAppear {
             updateWebView()
         }
-        .onChange(of: enableJavaScript, initial: false, { _, _ in self.updateWebView() })
-        .onChange(of: requestDesktopSite, initial: false, { _, _ in self.updateWebView() })
-        .onChange(of: textZoom, initial: false, { _, _ in self.applyTextZoom() })
+        .onChange(of: settings.enableJavaScript, initial: false, { _, _ in self.updateWebView() })
+        .onChange(of: settings.requestDesktopSite, initial: false, { _, _ in self.updateWebView() })
+        .onChange(of: settings.textZoom, initial: false, { _, _ in self.applyTextZoom() })
     }
 
     struct SearchSuggestions : Identifiable {
@@ -84,13 +148,13 @@ import NetSkipModel
             updatePageURL(nil, url.absoluteString)
         }
 
-        webView.configuration.defaultWebpagePreferences.allowsContentJavaScript = enableJavaScript
+        webView.configuration.defaultWebpagePreferences.allowsContentJavaScript = settings.enableJavaScript
 
         // Apply user agent
-        if requestDesktopSite {
+        if settings.requestDesktopSite {
             webView.customUserAgent = Self.desktopUserAgent
-        } else if !userAgent.isEmpty {
-            webView.customUserAgent = userAgent
+        } else if !settings.userAgent.isEmpty {
+            webView.customUserAgent = settings.userAgent
         } else {
             webView.customUserAgent = nil // use default
         }
@@ -101,6 +165,11 @@ import NetSkipModel
         if let newURL = newURL {
             logger.log("changed pageURL to: \(newURL)")
             viewModel.urlTextField = newURL
+            // Mirror onto the view-model's saved field so the tab card
+            // in the overview still shows the right domain after the
+            // user leaves this tab (the WebView's live `state.url` is
+            // not always populated for background tabs).
+            viewModel.savedURL = newURL
             showBottomBar = true // when the URL changes, always show the bottom bar again
             if var pageInfo = trying(operation: { try store.loadItems(type: .active, ids: [viewModel.id]) })?.first {
                 pageInfo.url = newURL
@@ -112,6 +181,10 @@ import NetSkipModel
     func updatePageTitle(_ oldTitle: String?, _ newTitle: String?) {
         if let newTitle = newTitle {
             logger.log("loaded page title: \(newTitle)")
+            // Same mirror as `updatePageURL` — keeps the tab card
+            // showing the page title in the overview after the user
+            // navigates away to another tab.
+            viewModel.savedTitle = newTitle
             addPageToHistory()
             if var pageInfo = trying(operation: { try store.loadItems(type: .active, ids: [viewModel.id]) })?.first {
                 pageInfo.title = newTitle
@@ -120,7 +193,7 @@ import NetSkipModel
                 }
             }
             // Fire page load haptic
-            if pageLoadHaptics {
+            if settings.pageLoadHaptics {
                 triggerPageLoadHaptic.toggle()
             }
         }
@@ -132,12 +205,12 @@ import NetSkipModel
         // so values > 1.0 make content appear smaller. Use the reciprocal to get
         // the expected behavior where textZoom > 1.0 means "zoom in" (larger text).
         if let webView = self.webView {
-            webView.pageZoom = 1.0 / textZoom
+            webView.pageZoom = 1.0 / settings.textZoom
         }
         #else
         // Android: use the native WebView settings.textZoom (integer percentage)
         if let webView = self.webView {
-            let pct = Int(textZoom * 100.0)
+            let pct = Int(settings.textZoom * 100.0)
             webView.getSettings().setTextZoom(pct)
         }
         #endif
@@ -224,12 +297,19 @@ import NetSkipModel
                 .autocorrectionDisabled(true)
                 .textInputAutocapitalization(.never)
                 .multilineTextAlignment(isURLBarFocused ? .leading : .center)
-                // Select-all on focus, mirroring UITextField.selectAll behavior.
-                // Listen only while the bar is focused so we don't selectAll on every
-                // UITextField in the app (e.g. the Find-on-page bar) — that broad
-                // notification trigger was causing focus-state glitches.
+                // Select-all on focus so a tap lets the user immediately
+                // type a replacement URL (mirrors the Android branch's
+                // `TextSelection` behavior below). We filter by the
+                // SwiftUI accessibility identifier rather than the
+                // @FocusState — at the moment `textDidBeginEditing` fires
+                // the UIKit first-responder change hasn't yet flushed
+                // into @FocusState, so the previous `guard isURLBarFocused`
+                // dropped the very first tap and the user saw the cursor
+                // placed mid-text instead of a full selection.
                 .onReceive(NotificationCenter.default.publisher(for: UITextField.textDidBeginEditingNotification)) { obj in
-                    guard isURLBarFocused, let textField = obj.object as? UITextField else { return }
+                    guard let textField = obj.object as? UITextField,
+                          textField.accessibilityIdentifier == "field.url",
+                          !(textField.text ?? "").isEmpty else { return }
                     textField.selectAll(nil)
                 }
                 #endif
@@ -252,7 +332,7 @@ import NetSkipModel
                     self.isURLBarFocused = false
                 }
                 .task(id: viewModel.urlTextField) {
-                    if searchSuggestions && isURLBarFocused && !viewModel.urlTextField.isEmpty {
+                    if settings.searchSuggestions && isURLBarFocused && !viewModel.urlTextField.isEmpty {
                         Task {
                             do {
                                 try await fetchSearchSuggestions(string: viewModel.urlTextField)
@@ -285,13 +365,26 @@ import NetSkipModel
                     .accessibilityIdentifier("button.url.stop")
                     .accessibilityLabel(Text("Stop loading", bundle: .module, comment: "accessibility label for the URL bar stop-loading button"))
                 } else if state.pageURL != nil {
-                    // Reload button
-                    Button(action: { self.viewModel.navigator.reload() }, label: {
+                    // Reload button — tap reloads normally, long-press
+                    // reveals a "Hard Reload" item that clears the cache
+                    // before reloading. Mirrors the long-press menus on
+                    // the Tabs / back / forward toolbar buttons.
+                    Menu {
+                        Button(action: { hardReloadAction() }) {
+                            Label {
+                                Text("Hard Reload", bundle: .module, comment: "menu label that clears the cache for the current page and reloads it")
+                            } icon: {
+                                Image("arrow.clockwise", bundle: .module)
+                            }
+                        }
+                        .accessibilityIdentifier("menu.hardReload")
+                    } label: {
                         Image("arrow.clockwise", bundle: .module)
                             .font(.system(size: 14))
                             .foregroundStyle(.secondary)
-                    })
-                    .buttonStyle(.plain)
+                    } primaryAction: {
+                        self.viewModel.navigator.reload()
+                    }
                     .accessibilityIdentifier("button.url.reload")
                     .accessibilityLabel(Text("Reload page", bundle: .module, comment: "accessibility label for the URL bar reload button"))
                 }
@@ -408,11 +501,34 @@ import NetSkipModel
     }
 
     func fetchSearchSuggestions(string: String) async throws {
-        guard let engine = SearchEngine.lookup(id: self.searchEngine) else { return }
+        guard let engine = SearchEngine.lookup(id: settings.searchEngine) else { return }
         // SKIP NOWARN
         let suggestions: [String]? = try await engine.suggestions(string)
         logger.log("fetched search suggestion: \(String(describing: suggestions))")
         self.currentSuggestions = SearchSuggestions(engine: engine, suggestions: suggestions ?? [])
+    }
+
+    /// Clears the current tab's cache (disk + memory + offline application
+    /// cache, but not cookies or local storage) and reloads the page. Same
+    /// data-type set as the Settings "Clear Web Cache" action, so the user
+    /// stays signed in everywhere; this just forces fresh asset fetches for
+    /// the page in front of them, the way a desktop "hard reload" does.
+    func hardReloadAction() {
+        logger.info("hardReloadAction")
+        if let engine = self.viewModel.navigator.webEngine {
+            let cacheTypes: Set<WebSiteDataType> = [.diskCache, .memoryCache, .offlineWebApplicationCache]
+            let navigator = self.viewModel.navigator
+            Task {
+                do {
+                    try await engine.removeData(ofTypes: cacheTypes, modifiedSince: .distantPast)
+                } catch {
+                    logger.warning("hardReloadAction: failed to clear cache: \(error)")
+                }
+                navigator.reload()
+            }
+        } else {
+            self.viewModel.navigator.reload()
+        }
     }
 
     func addPageToHistory() {
