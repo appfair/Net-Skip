@@ -325,6 +325,31 @@ private extension URL {
         self.cornerRadius = cornerRadius
     }
 
+    /// Single-character avatar label — first character of the
+    /// domain, uppercased. Mirrors `BrowserTabView.domainAvatarLetter`
+    /// so an icon and its tab-card snapshot fallback line up.
+    static func avatarLetter(for domain: String) -> String {
+        guard let first = domain.first else { return "?" }
+        return String(first).uppercased()
+    }
+
+    /// Deterministic per-domain background color for the letter
+    /// avatar. Same domain → same hue across surfaces. The ASCII
+    /// byte-position weighted sum keeps Skip Lite happy (no
+    /// BigInteger casts from `Character.unicodeScalars.value`).
+    static func avatarColor(for domain: String) -> Color {
+        var sum: Int = 0
+        var position: Int = 0
+        for ch in domain {
+            if let ascii = ch.asciiValue {
+                sum = sum + Int(ascii) * (position + 1)
+                position = position + 1
+            }
+        }
+        let hue = Double(sum % 360) / 360.0
+        return Color(hue: hue, saturation: 0.55, brightness: 0.62)
+    }
+
     public var body: some View {
         ZStack {
             if let data = loadedData, let uiImage = UIImage(data: data) {
@@ -334,11 +359,23 @@ private extension URL {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: size, height: size)
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            } else if let domain = NetSkipFaviconCache.domain(from: urlString) {
+                // Per-domain letter avatar — same hash → same color
+                // every time, so a site keeps its identity colour
+                // across URL bar / history / bookmarks / tab cards
+                // even when the network favicon isn't available.
+                // Matches the tab-card snapshot fallback look.
+                ZStack {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(Self.avatarColor(for: domain))
+                    Text(verbatim: Self.avatarLetter(for: domain))
+                        .font(.system(size: size * 0.55, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                }
+                .frame(width: size, height: size)
             } else {
-                // Placeholder: a Material Symbols "captive_portal"
-                // glyph in the user's accent color. Same rounded
-                // bounds as the real favicon so the layout slot
-                // doesn't reflow when the fetch finishes.
+                // No URL at all (blank tab, edit suggestions, etc.) —
+                // neutral globe glyph rather than a random colour.
                 Image("captive_portal", bundle: .module)
                     .resizable()
                     .aspectRatio(contentMode: .fit)

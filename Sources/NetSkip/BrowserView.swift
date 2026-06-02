@@ -667,17 +667,72 @@ import NetSkipModel
                 }
                 .listStyle(.plain)
             } else {
-                Spacer()
-                VStack(spacing: 12) {
-                    Image("magnifyingglass", bundle: .module)
-                        .font(.system(size: 36))
-                        .foregroundStyle(.secondary)
-                    Text("Search or enter a URL", bundle: .module, comment: "start page prompt")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
+                // Empty new-tab state. If we have any recently
+                // visited pages, show them as a "Recent" shortcut
+                // list with favicons — Safari "Frequently Visited" /
+                // Chrome "Most Visited" style. Falls back to the
+                // bare magnifying-glass prompt when history is empty
+                // (i.e. genuinely fresh app install).
+                let recent = trying(operation: {
+                    try store.loadItems(type: .history, ids: [])
+                }) ?? []
+                let top = Array(recent.prefix(6))
+                if top.isEmpty {
+                    Spacer()
+                    VStack(spacing: 12) {
+                        Image("magnifyingglass", bundle: .module)
+                            .font(.system(size: 36))
+                            .foregroundStyle(.secondary)
+                        Text("Search or enter a URL", bundle: .module, comment: "start page prompt")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityIdentifier("view.newTab.empty")
+                    Spacer()
+                } else {
+                    List {
+                        Section {
+                            ForEach(top) { item in
+                                Button {
+                                    if let url = item.url {
+                                        withAnimation {
+                                            self.submitURL(url)
+                                            self.isURLBarFocused = false
+                                        }
+                                    }
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        FaviconView(urlString: item.url, size: 24.0, cornerRadius: 5.0)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(item.title ?? item.url ?? "")
+                                                .font(.body)
+                                                .lineLimit(1)
+                                            if item.title != nil, let urlString = item.url {
+                                                Text(urlString)
+                                                    .font(.caption)
+                                                    .foregroundStyle(Color.gray)
+                                                    .lineLimit(1)
+                                                    #if !SKIP
+                                                    .truncationMode(.middle)
+                                                    #endif
+                                            }
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    #if !SKIP
+                                    .contentShape(Rectangle())
+                                    #endif
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        } header: {
+                            Text("Recent", bundle: .module, comment: "section header on the empty new-tab state listing the most recently visited pages from history")
+                                .accessibilityIdentifier("view.newTab.recent")
+                        }
+                    }
+                    .listStyle(.plain)
+                    .accessibilityIdentifier("view.newTab.empty")
                 }
-                .accessibilityIdentifier("view.newTab.empty")
-                Spacer()
             }
         }
         #if !SKIP
