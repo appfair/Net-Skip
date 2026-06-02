@@ -719,6 +719,14 @@ import NetSkipModel
     func addPageToHistory() {
         if let pageURL = state.url, let title = state.pageTitle {
             let url = pageURL.absoluteString
+            // Don't pollute history with internal placeholder URLs.
+            // `about:blank` is what WKWebView reports for a fresh
+            // blank tab; `data:`/`file:` are local routes that have
+            // no business in browsing history either.
+            let scheme = pageURL.scheme?.lowercased() ?? ""
+            if url == "about:blank" || scheme == "about" || scheme == "data" || scheme == "file" {
+                return
+            }
             logger.info("addPageToHistory: \(title) \(url)")
             trying {
                 // Update existing history entry if URL already exists, otherwise create new
