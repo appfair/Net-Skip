@@ -122,6 +122,26 @@ import NetSkipModel
         #endif
         .onAppear {
             updateWebView()
+            consumeFocusURLBarSignal()
+        }
+        .onChange(of: viewModel.shouldFocusURLBar) { _, newValue in
+            // Covers the "reuse existing blank tab" case where this
+            // BrowserView is already mounted when `newTabAction` flips
+            // the flag — onAppear won't fire a second time.
+            if newValue {
+                consumeFocusURLBarSignal()
+            }
+        }
+        .onDisappear {
+            // Last-chance snapshot before this tab's WebView leaves the
+            // hierarchy. Important for the tab grid: the eager capture
+            // in `updatePageTitle` only fires once per page load, so a
+            // tab that's been sitting idle would otherwise lose its
+            // snapshot if the page hadn't quite finished painting when
+            // the title arrived.
+            Task { @MainActor in
+                await viewModel.captureSnapshot()
+            }
         }
         .onChange(of: settings.enableJavaScript, initial: false, { _, _ in self.updateWebView() })
         .onChange(of: settings.requestDesktopSite, initial: false, { _, _ in self.updateWebView() })
@@ -164,15 +184,21 @@ import NetSkipModel
     func updatePageURL(_ oldURL: String?, _ newURL: String?) {
         if let newURL = newURL {
             logger.log("changed pageURL to: \(newURL)")
-            viewModel.urlTextField = newURL
+            // Treat the WKWebView's "about:blank" placeholder as no
+            // URL — a freshly-created blank tab should show an empty
+            // URL bar (matching Safari / Chrome / DuckDuckGo) so the
+            // user can begin typing without first clearing the field.
+            // Internal "about:" routes aren't user-meaningful either.
+            let blank = newURL.isEmpty || newURL == "about:blank"
+            viewModel.urlTextField = blank ? "" : newURL
             // Mirror onto the view-model's saved field so the tab card
             // in the overview still shows the right domain after the
             // user leaves this tab (the WebView's live `state.url` is
             // not always populated for background tabs).
-            viewModel.savedURL = newURL
+            viewModel.savedURL = blank ? "" : newURL
             showBottomBar = true // when the URL changes, always show the bottom bar again
             if var pageInfo = trying(operation: { try store.loadItems(type: .active, ids: [viewModel.id]) })?.first {
-                pageInfo.url = newURL
+                pageInfo.url = blank ? nil : newURL
                 _ = trying { try store.saveItems(type: .active, items: [pageInfo]) }
             }
         }
@@ -196,6 +222,36 @@ import NetSkipModel
             if settings.pageLoadHaptics {
                 triggerPageLoadHaptic.toggle()
             }
+            // Capture a thumbnail for the tab grid NOW, while this
+            // tab's WebView is the active one. Capturing on tab-switch
+            // is unreliable on iOS — by the time the leaving tab's
+            // BrowserView's onDisappear fires, the WKWebView is already
+            // detached and `takeSnapshot` returns blank pixels.
+            // Capture immediately on title arrival. A short defer would
+            // let above-the-fold paint settle, but in practice the
+            // user (or a test harness) can navigate away inside even a
+            // 200ms window, leaving the tab with no snapshot. A "title
+            // landed, paint in progress" capture is preferable to no
+            // capture at all — and `captureAllTabSnapshots` on tab-grid
+            // open will re-snapshot whatever is still active.
+            Task { @MainActor in
+                await viewModel.captureSnapshot()
+            }
+        }
+    }
+
+    /// Honor the one-shot focus signal armed by `newTabAction` when
+    /// the user opens (or reuses) a blank tab — focusing the URL bar
+    /// pops the keyboard immediately so they can type without an
+    /// extra tap. Clears the flag so subsequent appearances of this
+    /// view don't re-grab focus. Deferred to the next runloop tick
+    /// because SwiftUI hasn't finished wiring up `@FocusState` by
+    /// the time `.onAppear`/`.onChange` runs.
+    private func consumeFocusURLBarSignal() {
+        guard viewModel.shouldFocusURLBar else { return }
+        viewModel.shouldFocusURLBar = false
+        Task { @MainActor in
+            self.isURLBarFocused = true
         }
     }
 
@@ -394,18 +450,29 @@ import NetSkipModel
             // Domain overlay: visible only when NOT focused.
             // allowsHitTesting(false) lets taps fall through to the TextField.
             if !isURLBarFocused {
+                // Treat WKWebView's "about:blank" placeholder as "no
+                // page" — the same way `updatePageURL` suppresses it
+                // from the editable field. Otherwise a defocused
+                // brand-new tab would render the literal string
+                // "about:blank" instead of the search placeholder.
+                let hasRealURL: Bool = {
+                    if let pageURL = state.pageURL {
+                        return !pageURL.isEmpty && pageURL != "about:blank"
+                    }
+                    return false
+                }()
                 HStack(spacing: 4) {
-                    if state.pageURL != nil && !state.isLoading {
+                    if hasRealURL && !state.isLoading {
                         Image("lock", bundle: .module)
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                     }
 
                     if state.isLoading {
-                        Text("Loading...")
+                        Text("Loading...", bundle: .module, comment: "URL bar text shown while a page is loading")
                             .font(.system(size: 15))
                             .foregroundStyle(.secondary)
-                    } else if let pageURL = state.pageURL {
+                    } else if hasRealURL, let pageURL = state.pageURL {
                         Text(domainFromURL(pageURL))
                             .font(.system(size: 15))
                             .foregroundStyle(.primary)
@@ -422,6 +489,68 @@ import NetSkipModel
             }
         }
         .padding(.horizontal, showBottomBar ? 8.0 : 0.0)
+        .contextMenu {
+            // Long-press → quick URL actions, matching the Safari /
+            // Chrome / DuckDuckGo pattern. iOS's native UITextField edit
+            // menu still takes over once the bar is focused (because
+            // the TextField captures the long-press at that point), so
+            // this only competes for the unfocused state.
+            if let pageURL = state.pageURL, !pageURL.isEmpty {
+                Button(action: { urlBarCopyURLAction(pageURL) }) {
+                    Label {
+                        Text("Copy URL", bundle: .module, comment: "menu label for copying the current page URL to the clipboard")
+                    } icon: {
+                        Image("content_copy", bundle: .module)
+                    }
+                }
+                .accessibilityIdentifier("menu.urlBar.copyURL")
+            }
+
+            Button(action: urlBarPasteAndGoAction) {
+                Label {
+                    Text("Paste and Go", bundle: .module, comment: "menu label for pasting the clipboard contents into the URL bar and navigating to that page")
+                } icon: {
+                    Image("content_paste", bundle: .module)
+                }
+            }
+            .accessibilityIdentifier("menu.urlBar.pasteAndGo")
+        }
+    }
+
+    /// Copies a URL string to the system clipboard — used by the URL
+    /// bar's long-press context menu. Duplicates `BrowserTabView`'s
+    /// `copyURLAction` rather than calling it because `BrowserView`
+    /// doesn't have a reference to the parent tab view (we get
+    /// `submitURL` via a closure, not the whole controller).
+    func urlBarCopyURLAction(_ pageURL: String) {
+        #if SKIP
+        let ctx = ProcessInfo.processInfo.androidContext
+        let cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("URL", pageURL))
+        #else
+        UIPasteboard.general.string = pageURL
+        #endif
+    }
+
+    /// Reads the current clipboard contents and submits them as a URL
+    /// query through the parent view's `submitURL` closure. Empty
+    /// clipboard is a no-op.
+    func urlBarPasteAndGoAction() {
+        let clipboardText: String?
+        #if SKIP
+        let ctx = ProcessInfo.processInfo.androidContext
+        let cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        if let clip = cm.primaryClip, clip.itemCount > 0 {
+            clipboardText = clip.getItemAt(0).coerceToText(ctx)?.toString()
+        } else {
+            clipboardText = nil
+        }
+        #else
+        clipboardText = UIPasteboard.general.string
+        #endif
+        if let text = clipboardText, !text.isEmpty {
+            submitURL(text)
+        }
     }
 
     @ViewBuilder func suggestionsView() -> some View {
@@ -440,7 +569,12 @@ import NetSkipModel
                         // for a new tab) so the user's in-progress edit is discarded.
                         self.isURLBarFocused = false
                         self.currentSuggestions = nil
-                        self.viewModel.urlTextField = state.pageURL ?? ""
+                        // Restore to current page URL — but treat
+                        // "about:blank" as no URL so Cancel on a fresh
+                        // blank tab leaves the bar empty rather than
+                        // re-stamping the placeholder URL.
+                        let restore = state.pageURL ?? ""
+                        self.viewModel.urlTextField = restore == "about:blank" ? "" : restore
                     }, label: {
                         Text("Cancel", bundle: .module, comment: "cancel button for dismissing suggestions")
                             .fontWeight(.medium)
@@ -492,6 +626,7 @@ import NetSkipModel
                         .font(.headline)
                         .foregroundStyle(.secondary)
                 }
+                .accessibilityIdentifier("view.newTab.empty")
                 Spacer()
             }
         }

@@ -171,64 +171,145 @@ struct PageInfoListView<ToolbarItems : ToolbarContent> : View {
 
     var itemsListView: some View {
         List {
-            ForEach(filteredItems) { item in
-                Button(action: {
-                    dismiss()
-                    onSelect(item)
-                }, label: {
-                    VStack(alignment: .leading) {
-                        itemTitle(item: item)
-                            .font(.body)
-                            .lineLimit(1)
-                        #if !SKIP
-                        // SKIP TODO: formatted
-//                                Text(item.date.formatted())
-//                                    .font(.body)
-//                                    .lineLimit(1)
-                        #endif
-                        Text(item.url ?? "")
-                            .font(.caption)
-                            .foregroundStyle(Color.gray)
-                            .lineLimit(1)
+            if type == PageInfo.PageType.history {
+                ForEach(groupedHistoryItems, id: \.bucket) { group in
+                    Section {
+                        ForEach(group.items) { item in
+                            itemRow(item: item)
+                        }
+                        .onDelete { offsets in
+                            deleteItems(group.items.enumerated().compactMap { offsets.contains($0.offset) ? $0.element : nil })
+                        }
+                    } header: {
+                        historyBucketHeader(for: group.bucket)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
                             #if !SKIP
-                            .truncationMode(.middle)
+                            .textCase(nil)
                             #endif
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    #if !SKIP
-                    .contentShape(Rectangle()) // needed to make the tap target fill the area
-                    #endif
-                })
-                .buttonStyle(.plain)
-                .contextMenu {
-                    Button {
-                        dismiss()
-                        onOpenInNewTab(item)
-                    } label: {
-                        Label {
-                            Text("Open in New Tab", bundle: .module, comment: "context menu label on a History/Favorites row that opens the URL in a fresh background tab")
-                        } icon: {
-                            Image("plus.square.on.square", bundle: .module)
-                        }
-                    }
-                    .accessibilityIdentifier("menu.pageInfo.openInNewTab")
                 }
-            }
-            .onDelete { offsets in
-                // Index into the visible (filtered) list — otherwise a
-                // swipe-to-delete on a filtered row would delete the
-                // wrong entry from the underlying store.
-                let visible = filteredItems
-                let deleteItems = offsets.map({ visible[$0] })
-                let ids = deleteItems.map(\.id)
-                logger.log("deleting \(type.tableName) items: \(ids)")
-                trying {
-                    try store.removeItems(type: type, ids: Set(ids))
+            } else {
+                ForEach(filteredItems) { item in
+                    itemRow(item: item)
                 }
-                onDelete(deleteItems)
-                loadPageInfoItems()
+                .onDelete { offsets in
+                    // Index into the visible (filtered) list — otherwise a
+                    // swipe-to-delete on a filtered row would delete the
+                    // wrong entry from the underlying store.
+                    let visible = filteredItems
+                    deleteItems(offsets.map({ visible[$0] }))
+                }
             }
         }
+    }
+
+    @ViewBuilder
+    func itemRow(item: PageInfo) -> some View {
+        Button(action: {
+            dismiss()
+            onSelect(item)
+        }, label: {
+            VStack(alignment: .leading) {
+                itemTitle(item: item)
+                    .font(.body)
+                    .lineLimit(1)
+                Text(item.url ?? "")
+                    .font(.caption)
+                    .foregroundStyle(Color.gray)
+                    .lineLimit(1)
+                    #if !SKIP
+                    .truncationMode(.middle)
+                    #endif
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            #if !SKIP
+            .contentShape(Rectangle()) // needed to make the tap target fill the area
+            #endif
+        })
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                dismiss()
+                onOpenInNewTab(item)
+            } label: {
+                Label {
+                    Text("Open in New Tab", bundle: .module, comment: "context menu label on a History/Favorites row that opens the URL in a fresh background tab")
+                } icon: {
+                    Image("plus.square.on.square", bundle: .module)
+                }
+            }
+            .accessibilityIdentifier("menu.pageInfo.openInNewTab")
+        }
+    }
+
+    func deleteItems(_ pageInfos: [PageInfo]) {
+        let ids = pageInfos.map(\.id)
+        logger.log("deleting \(type.tableName) items: \(ids)")
+        trying {
+            try store.removeItems(type: type, ids: Set(ids))
+        }
+        onDelete(pageInfos)
+        loadPageInfoItems()
+    }
+
+    /// Bucket index 0–3 for a history entry: 0=Today, 1=Yesterday,
+    /// 2=Last 7 Days, 3=Older. Same buckets every desktop browser uses
+    /// in its History panel.
+    func historyBucketIndex(for date: Date) -> Int {
+        // Compute days-since by normalizing both sides to midnight via
+        // `Calendar.startOfDay(for:)`. Skip's Calendar doesn't yet
+        // bridge `isDateInYesterday`/`isDateInToday`, so this manual
+        // form is the cross-platform-safe path.
+        let cal = Calendar.current
+        let nowStart = cal.startOfDay(for: Date())
+        let itemStart = cal.startOfDay(for: date)
+        let interval = nowStart.timeIntervalSince(itemStart)
+        let days = Int(interval / 86400.0)
+        if days <= 0 { return 0 }
+        if days == 1 { return 1 }
+        if days <= 7 { return 2 }
+        return 3
+    }
+
+    /// Localized section-header `Text` for a history date bucket.
+    /// One literal `Text(_:bundle:comment:)` per branch so the String
+    /// Catalog extractor sees each header key.
+    @ViewBuilder
+    func historyBucketHeader(for bucket: Int) -> some View {
+        switch bucket {
+        case 0:
+            Text("Today", bundle: .module, comment: "history list date-section header for pages visited today")
+        case 1:
+            Text("Yesterday", bundle: .module, comment: "history list date-section header for pages visited yesterday")
+        case 2:
+            Text("Last 7 Days", bundle: .module, comment: "history list date-section header for pages visited in the past week")
+        default:
+            Text("Older", bundle: .module, comment: "history list date-section header for pages older than a week")
+        }
+    }
+
+    /// `filteredItems` partitioned into the four history buckets,
+    /// dropping any empty bucket so the list doesn't carry a stranded
+    /// "Older" header when the user only has fresh history. Items
+    /// inside each bucket are sorted newest-first.
+    var groupedHistoryItems: [(bucket: Int, items: [PageInfo])] {
+        var buckets: [Int: [PageInfo]] = [:]
+        for item in filteredItems {
+            let key = historyBucketIndex(for: item.date)
+            if buckets[key] == nil {
+                buckets[key] = []
+            }
+            buckets[key]?.append(item)
+        }
+        var result: [(bucket: Int, items: [PageInfo])] = []
+        for key in 0...3 {
+            if let items = buckets[key], !items.isEmpty {
+                let sorted = items.sorted(by: { $0.date > $1.date })
+                result.append((bucket: key, items: sorted))
+            }
+        }
+        return result
     }
 
     func itemTitle(item: PageInfo) -> some View {

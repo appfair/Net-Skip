@@ -38,12 +38,16 @@ public struct PageInfo : Identifiable {
     public var url: String?
     public var title: String?
     public var date: Date
+    /// User-pinned. Only meaningful for `active` rows; history/favorite
+    /// entries persist the column but ignore it.
+    public var pinned: Bool
 
-    public init(id: ID = Int64(0), url: String?, title: String? = nil, date: Date = Date.now) {
+    public init(id: ID = Int64(0), url: String?, title: String? = nil, date: Date = Date.now, pinned: Bool = false) {
         self.id = id
         self.url = url
         self.title = title
         self.date = date
+        self.pinned = pinned
     }
 }
 
@@ -105,19 +109,21 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
             let url = SQLValue.text(item.url ?? "")
             let title = item.title.flatMap { SQLValue.text($0) } ?? SQLValue.null
             let date = SQLValue.real(item.date.timeIntervalSince1970)
+            let pinned = SQLValue.long(item.pinned ? Int64(1) : Int64(0))
 
             let statement: SQLStatement
             if item.id != newID { // id=0 means new record
-                statement = try ctx.prepare(sql: "UPDATE \(table) SET url = ?, title = ?, date = ? WHERE id = ?")
+                statement = try ctx.prepare(sql: "UPDATE \(table) SET url = ?, title = ?, date = ?, pinned = ? WHERE id = ?")
             } else {
-                statement = try ctx.prepare(sql: "INSERT INTO \(table) (url, title, date) VALUES (?, ?, ?)")
+                statement = try ctx.prepare(sql: "INSERT INTO \(table) (url, title, date, pinned) VALUES (?, ?, ?, ?)")
             }
 
             try statement.bind(url, at: 1)
             try statement.bind(title, at: 2)
             try statement.bind(date, at: 3)
+            try statement.bind(pinned, at: 4)
             if item.id != newID {
-                try statement.bind(SQLValue.long(item.id), at: 4)
+                try statement.bind(SQLValue.long(item.id), at: 5)
             }
 
             defer { do { try statement.close() } catch {} }
@@ -133,9 +139,9 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
 
         let statement: SQLStatement
         if ids.isEmpty {
-            statement = try ctx.prepare(sql: "SELECT id, url, title, date FROM \(table) ORDER BY date DESC")
+            statement = try ctx.prepare(sql: "SELECT id, url, title, date, pinned FROM \(table) ORDER BY date DESC")
         } else {
-            statement = try ctx.prepare(sql: "SELECT id, url, title, date FROM \(table) WHERE id IN (\(ids.map(\.description).joined(separator: ","))) ORDER BY date DESC")
+            statement = try ctx.prepare(sql: "SELECT id, url, title, date, pinned FROM \(table) WHERE id IN (\(ids.map(\.description).joined(separator: ","))) ORDER BY date DESC")
         }
         defer { do { try statement.close() } catch {} }
 
@@ -145,8 +151,9 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
             let url = statement.text(at: 1) ?? ""
             let title = statement.text(at: 2)
             let date = statement.real(at: 3)
+            let pinned = statement.long(at: 4) != Int64(0)
 
-            let item = PageInfo(id: id, url: url, title: title, date: Date(timeIntervalSince1970: date))
+            let item = PageInfo(id: id, url: url, title: title, date: Date(timeIntervalSince1970: date), pinned: pinned)
             items.append(item)
         }
         return items
@@ -214,6 +221,15 @@ public class NetSkipWebBrowserStore : WebBrowserStore {
 
         // if auto_vacuum is set after tables were created, we need to vacuum for it to take effect (cannot run within a transaction)
         currentVersion = try migrateSchema(v: Int64(5), current: currentVersion, transaction: nil, ddl: "VACUUM")
+
+        // Add the user-pinned column to the active table — that's the
+        // only table whose UI exposes a pin toggle. Done in three
+        // separate `migrateSchema` calls so each runs as its own
+        // statement (Skip's SQL `exec` doesn't reliably execute
+        // multi-statement DDL on Android).
+        currentVersion = try migrateSchema(v: Int64(6), current: currentVersion, ddl: "ALTER TABLE \(PageInfo.PageType.active.tableName) ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
+        currentVersion = try migrateSchema(v: Int64(7), current: currentVersion, ddl: "ALTER TABLE \(PageInfo.PageType.history.tableName) ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
+        currentVersion = try migrateSchema(v: Int64(8), current: currentVersion, ddl: "ALTER TABLE \(PageInfo.PageType.favorite.tableName) ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
     }
 
     private func currentSchemaVersion() throws -> Int64 {

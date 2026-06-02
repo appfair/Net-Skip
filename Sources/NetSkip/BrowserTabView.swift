@@ -42,6 +42,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     @State var showFindBar = false
     @State var showPageZoom = false
     @State var findText = ""
+    @State var findMatchCount: Int = 0
     @State var tabSearchText = ""
 
     @State var triggerImpact = false
@@ -102,15 +103,17 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             VStack(spacing: 0) {
                 browserTabView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                if showFindBar {
-                    findBar()
-                }
             }
-            // Bottom toolbar overlaid at the bottom — translucent so the
-            // WebView's content shows through, and collapsed to zero
-            // when `showBottomBar` is off so it disappears entirely on
-            // scroll-down.
-            bottomToolbar()
+            // Bottom chrome overlay. When find-on-page is active the
+            // find bar takes the toolbar's slot at the bottom — the
+            // pattern Chrome desktop uses — so the user can see the
+            // count and prev/next without anything else competing for
+            // the bottom strip. Close button restores the toolbar.
+            if showFindBar {
+                findBar()
+            } else {
+                bottomToolbar()
+            }
             if showPageZoom {
                 pageZoomBar()
             }
@@ -326,6 +329,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         let vm = BrowserViewModel(id: newID, navigator: WebViewNavigator(initialURL: newURL), configuration: configuration, store: store)
         vm.savedTitle = pageInfo.title ?? ""
         vm.savedURL = pageInfo.url ?? ""
+        vm.isPinned = pageInfo.pinned
         return vm
     }
 
@@ -338,21 +342,12 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     }
 
     func snapshotPath(for tabId: PageInfo.ID) -> URL {
-        return snapshotDirectory().appendingPathComponent("\(tabId).png")
+        return BrowserViewModel.snapshotPath(for: tabId)
     }
 
     func captureTabSnapshot(tab: BrowserViewModel) {
-        guard let webEngine = tab.navigator.webEngine else { return }
-        let tabId = tab.id
         Task { @MainActor in
-            do {
-                let config = SkipWebSnapshotConfiguration(snapshotWidth: 300)
-                let snapshot = try await webEngine.takeSnapshot(configuration: config)
-                let path = snapshotPath(for: tabId)
-                try snapshot.pngData.write(to: path)
-            } catch {
-                logger.warning("Failed to capture tab snapshot: \(error)")
-            }
+            await tab.captureSnapshot()
         }
     }
 
@@ -390,7 +385,6 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                         EmptyView()
                     }
                     .pickerStyle(.segmented)
-                    .colorScheme(.dark)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                 }
@@ -402,9 +396,27 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 }
             }
             .background(Color(white: 0.12))
+            #if !SKIP
+            // Whole tabs sheet uses a hard-coded dark background, so
+            // semantic system colors (placeholder text, secondary
+            // labels, separators) must resolve to their dark-mode
+            // values — otherwise a Light-Mode device renders the
+            // search-bar placeholder dark-grey on dark-grey.
+            .environment(\.colorScheme, .dark)
+            #endif
             .navigationTitle(Text(tabsSegment == 1 || !settings.enableMiniApps ? "\(tabs.count) Tabs" : "Mini Apps", bundle: .module, comment: "tabs title"))
             #if !SKIP
             .navigationBarTitleDisplayMode(.inline)
+            // The tab grid below has a hard-coded dark background
+            // (Color(white: 0.12)) regardless of system appearance,
+            // so the navigation bar must match. `toolbarColorScheme`
+            // alone has regressed on iOS 26 — it leaves the title
+            // dark when the toolbar background is light, giving a
+            // dark-on-dark title against the dark grid below. Pin
+            // both the bar background AND the color scheme so the
+            // title renders in white regardless of system theme.
+            .toolbarBackground(Color(white: 0.12), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             #endif
             .toolbar {
@@ -646,6 +658,22 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         let snapshotImage = loadSnapshotImage(for: tab.id)
 
         Button {
+            // Mirror the outgoing tab's live state onto its saved
+            // fields and capture a fresh snapshot before the swap, for
+            // the same reason `newTabAction` does — once SwiftUI tears
+            // down the leaving BrowserView's WebView, neither state
+            // nor pixels are recoverable.
+            if let outgoing = currentViewModel, outgoing.id != tab.id {
+                if let pageURL = outgoing.state.pageURL, !pageURL.isEmpty {
+                    outgoing.savedURL = pageURL
+                }
+                if let pageTitle = outgoing.state.pageTitle, !pageTitle.isEmpty {
+                    outgoing.savedTitle = pageTitle
+                }
+                Task { @MainActor in
+                    await outgoing.captureSnapshot()
+                }
+            }
             withAnimation {
                 self.selectedTab = tab.id
                 self.showActiveTabs = false
@@ -654,6 +682,12 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             VStack(alignment: .leading, spacing: 0) {
                 // Title bar
                 HStack(spacing: 4) {
+                    if tab.isPinned {
+                        Image("push_pin", bundle: .module)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Color.white)
+                            .accessibilityIdentifier("indicator.tab.pinned")
+                    }
                     if !urlString.isEmpty {
                         Image("lock", bundle: .module)
                             .font(.system(size: 9))
@@ -679,7 +713,11 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(isActive ? Color.accentColor : Color(white: 0.28))
+                .background(
+                    isActive
+                        ? Color.accentColor
+                        : (domain.isEmpty ? Color(white: 0.28) : domainAvatarColor(for: domain).opacity(0.85))
+                )
 
                 // Snapshot preview area
                 ZStack {
@@ -688,18 +726,33 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                         Image(uiImage: snapshotImage)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                    } else {
-                        // Fallback: show domain text
-                        VStack(spacing: 8) {
-                            Image("magnifyingglass", bundle: .module)
-                                .font(.system(size: 24))
-                                .foregroundStyle(Color.gray.opacity(0.4))
-                            if !domain.isEmpty {
-                                Text(domain)
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(Color.gray.opacity(0.6))
+                    } else if !domain.isEmpty {
+                        // No snapshot, but we know the domain — render a
+                        // favicon-style colored letter avatar. The color
+                        // is a deterministic hash of the domain so the
+                        // same site is always the same color across
+                        // sessions, and the contrast against the white
+                        // card background reads well at thumbnail size.
+                        VStack(spacing: 10) {
+                            ZStack {
+                                Circle()
+                                    .fill(domainAvatarColor(for: domain))
+                                    .frame(width: 64, height: 64)
+                                Text(verbatim: domainAvatarLetter(for: domain))
+                                    .font(.system(size: 30, weight: .semibold))
+                                    .foregroundStyle(Color.white)
                             }
+                            Text(verbatim: domain)
+                                .font(.system(size: 13))
+                                .foregroundStyle(Color(white: 0.35))
+                                .lineLimit(1)
+                                .padding(.horizontal, 8)
                         }
+                    } else {
+                        // Brand-new blank tab — no URL yet.
+                        Image("magnifyingglass", bundle: .module)
+                            .font(.system(size: 28))
+                            .foregroundStyle(Color.gray.opacity(0.4))
                     }
                 }
                 .frame(height: 180)
@@ -724,6 +777,26 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             .accessibilityIdentifier("menu.tabCard.copyURL")
             .disabled((tab.state.pageURL ?? tab.savedURL).isEmpty)
 
+            if tab.isPinned {
+                Button(action: { toggleTabPin(tab) }) {
+                    Label {
+                        Text("Unpin Tab", bundle: .module, comment: "context-menu item that removes the pin from a previously pinned tab card")
+                    } icon: {
+                        Image("keep_off", bundle: .module)
+                    }
+                }
+                .accessibilityIdentifier("menu.tabCard.unpin")
+            } else {
+                Button(action: { toggleTabPin(tab) }) {
+                    Label {
+                        Text("Pin Tab", bundle: .module, comment: "context-menu item that pins a tab to the start of the tab list so it stays at the top of the overview grid")
+                    } icon: {
+                        Image("push_pin", bundle: .module)
+                    }
+                }
+                .accessibilityIdentifier("menu.tabCard.pin")
+            }
+
             Button(role: .destructive, action: {
                 removeTabSnapshot(tabId: tab.id)
                 closeTabs([tab.id])
@@ -735,6 +808,33 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 }
             }
             .accessibilityIdentifier("menu.tabCard.close")
+        }
+    }
+
+    /// Flip the pin state on a tab and haptic-confirm. Pinned tabs
+    /// float to the start of the tab list so the user can find them
+    /// at a glance in the overview grid.
+    func toggleTabPin(_ tab: BrowserViewModel) {
+        logger.info("toggleTabPin id=\(tab.id) wasPinned=\(tab.isPinned)")
+        hapticFeedback()
+        tab.isPinned.toggle()
+        // Persist the new pin state on the tab's `active` row so the
+        // pin survives app relaunches — without this, restarting the
+        // app would forget every user-pinned tab.
+        if var pageInfo = trying(operation: { try store.loadItems(type: .active, ids: [tab.id]) })?.first {
+            pageInfo.pinned = tab.isPinned
+            _ = trying { try store.saveItems(type: .active, items: [pageInfo]) }
+        }
+        // Re-float pinned tabs to the front so the grid order matches
+        // the user's mental model: pinned first, then everything else
+        // in its previous order.
+        withAnimation {
+            self.tabs.sort(by: { lhs, rhs in
+                if lhs.isPinned != rhs.isPinned {
+                    return lhs.isPinned && !rhs.isPinned
+                }
+                return false
+            })
         }
     }
 
@@ -763,6 +863,37 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             host = host.replacingOccurrences(of: "www.", with: "")
         }
         return host
+    }
+
+    /// Single-character label for a domain-letter tab-card avatar. Uses
+    /// the first character of the domain (post-`www.`-strip) uppercased.
+    /// Falls back to a neutral glyph for blank tabs.
+    func domainAvatarLetter(for domain: String) -> String {
+        guard let first = domain.first else { return "?" }
+        return String(first).uppercased()
+    }
+
+    /// Deterministic background color for a domain-letter avatar. Same
+    /// domain always produces the same hue so the user can recognize a
+    /// site by its colour across tabs, history, and reopen-closed
+    /// surfaces. Saturation and brightness are tuned for legible white
+    /// foreground text at thumbnail size — mid-saturation jewel tones
+    /// rather than full-bright primaries.
+    func domainAvatarColor(for domain: String) -> Color {
+        // Domain names are ASCII (host names), so iterating ASCII byte
+        // values gives a stable hash across iOS and the Skip Kotlin
+        // transpilation (which treats `Character.unicodeScalars.value`
+        // as BigInteger and refuses the implicit cast to Int).
+        var sum: Int = 0
+        var position: Int = 0
+        for ch in domain {
+            if let ascii = ch.asciiValue {
+                sum = sum + Int(ascii) * (position + 1)
+                position = position + 1
+            }
+        }
+        let hue = Double(sum % 360) / 360.0
+        return Color(hue: hue, saturation: 0.55, brightness: 0.62)
     }
 
     #if !SKIP
@@ -1041,6 +1172,26 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             .accessibilityIdentifier("menu.reopenClosedTab")
             .disabled(recentlyClosedTabURLs.isEmpty)
 
+            // Up to four older recently-closed tabs surfaced as
+            // individual quick-reopen items. The first entry is what
+            // `reopenClosedTabAction` above pops; this row offers
+            // single-tap access to the rest of the stack without
+            // making the user re-pop-then-undo. Indexed by domain so
+            // the menu reads naturally even when the same site shows
+            // up multiple times in the recently-closed list.
+            ForEach(0..<min(4, max(0, recentlyClosedTabURLs.count - 1)), id: \.self) { offset in
+                let entryIndex = offset + 1
+                let entryURL = recentlyClosedTabURLs[entryIndex]
+                Button(action: { reopenRecentlyClosedTab(at: entryIndex) }) {
+                    Label {
+                        Text(verbatim: tabDomainFromURL(entryURL))
+                    } icon: {
+                        Image("arrow.clockwise", bundle: .module)
+                    }
+                }
+                .accessibilityIdentifier("menu.reopenClosedTab.\(entryIndex)")
+            }
+
             Button(action: reloadAllTabsAction) {
                 Label {
                     Text("Reload All Tabs", bundle: .module, comment: "menu label that triggers a reload on every open tab at once")
@@ -1050,6 +1201,16 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             }
             .accessibilityIdentifier("menu.reloadAllTabs")
             .disabled(tabs.isEmpty)
+
+            Button(action: sortTabsByDomainAction) {
+                Label {
+                    Text("Sort Tabs by Domain", bundle: .module, comment: "menu label that re-orders every open tab alphabetically by its host name — the modern Tab Manager tidy-up action")
+                } icon: {
+                    Image("sort_by_alpha", bundle: .module)
+                }
+            }
+            .accessibilityIdentifier("menu.sortTabsByDomain")
+            .disabled(tabs.count < 2)
 
             Button(role: .destructive, action: closeOtherTabsAction) {
                 Label {
@@ -1094,11 +1255,31 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 .onSubmit {
                     executeFindOnPage(findText)
                 }
+                .onChange(of: findText, initial: false) { _, newValue in
+                    // Recompute the match count whenever the query
+                    // changes — matches what the system find-navigator
+                    // on iOS shows alongside its prev/next buttons.
+                    Task { @MainActor in
+                        await countFindMatches(newValue)
+                    }
+                }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
                 .background(Color.gray.opacity(0.15))
                 .cornerRadius(8)
                 .accessibilityIdentifier("field.findOnPage")
+
+            // Match count — "12" matches, or "No matches" when the
+            // query is non-empty but the page contains zero hits. The
+            // empty-search case suppresses the label entirely so the
+            // bar reads cleanly before the user starts typing.
+            if !findText.isEmpty {
+                Text(findMatchCount == 0 ? "No matches" : "\(findMatchCount)", bundle: .module, comment: "find-on-page match-count label: number of matches or the literal 'No matches' phrase")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(findMatchCount == 0 ? Color.red : Color.secondary)
+                    .lineLimit(1)
+                    .accessibilityIdentifier("label.findOnPage.count")
+            }
 
             Button(action: {
                 executeFindOnPage(findText, backwards: true)
@@ -1107,7 +1288,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     .foregroundStyle(Color.accentColor)
             }
             .buttonStyle(.plain)
-            .disabled(findText.isEmpty)
+            .disabled(findText.isEmpty || findMatchCount == 0)
             .accessibilityIdentifier("button.findOnPage.previous")
             .accessibilityLabel(Text("Previous match", bundle: .module, comment: "accessibility label for the find-on-page Previous-match button"))
 
@@ -1118,7 +1299,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     .foregroundStyle(Color.accentColor)
             }
             .buttonStyle(.plain)
-            .disabled(findText.isEmpty)
+            .disabled(findText.isEmpty || findMatchCount == 0)
             .accessibilityIdentifier("button.findOnPage.next")
             .accessibilityLabel(Text("Next match", bundle: .module, comment: "accessibility label for the find-on-page Next-match button"))
 
@@ -1136,6 +1317,11 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+        // Explicit height matches the bottom toolbar — Compose's
+        // VStack on Android otherwise hands all available space to
+        // `browserTabView()`'s `.frame(maxHeight: .infinity)` and the
+        // find bar collapses to zero pixels.
+        .frame(height: 48.0)
         .background(Color(white: 0.95))
     }
 
@@ -1326,6 +1512,33 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 }
             }
             .accessibilityIdentifier("menu.pasteAndGo")
+
+            Button(action: openInExternalBrowserAction) {
+                Label {
+                    Text("Open in External Browser", bundle: .module, comment: "menu label that hands the current page URL to the system's default browser — the escape hatch for sites that don't render correctly in this WebView")
+                } icon: {
+                    Image("open_in_browser", bundle: .module)
+                }
+            }
+            .accessibilityIdentifier("menu.openInExternalBrowser")
+            .disabled(currentState?.pageURL == nil)
+
+            // Translate Page — temporarily disabled while we
+            // consider the right customization (provider choice,
+            // target language picker, in-place vs new-tab behavior).
+            // The `translatePageAction` implementation below remains
+            // ready for re-enabling once the design lands.
+            /*
+            Button(action: translatePageAction) {
+                Label {
+                    Text("Translate Page", bundle: .module, comment: "menu label that loads the current page through Google Translate so the user can read foreign-language content in their own language")
+                } icon: {
+                    Image("translate", bundle: .module)
+                }
+            }
+            .accessibilityIdentifier("menu.translatePage")
+            .disabled(currentState?.pageURL == nil)
+            */
 
             Divider()
 
@@ -1566,12 +1779,29 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         // can reopen via the "Reopen Closed Tab" menu item. Blank tabs and
         // about:blank don't go onto the stack — there's nothing to restore.
         for id in ids {
-            if let tab = tabs.first(where: { $0.id == id }),
-               let url = tab.state.pageURL,
-               !url.isEmpty, url != "about:blank" {
-                recentlyClosedTabURLs.insert(url, at: 0)
-                if recentlyClosedTabURLs.count > Self.recentlyClosedTabsLimit {
-                    recentlyClosedTabURLs.removeLast()
+            if let tab = tabs.first(where: { $0.id == id }) {
+                // Resolve the URL through three fallbacks: live page
+                // URL, the view-model's `savedURL` mirror, then the
+                // persistent store. On iOS, background tabs' WebView
+                // state can be reset to an empty string (so the live
+                // and mirrored fields drop out), but `BrowserView`'s
+                // `updatePageURL` writes the URL back to the store on
+                // every navigation, so the store always has it.
+                var url = tab.state.pageURL ?? ""
+                if url.isEmpty {
+                    url = tab.savedURL
+                }
+                if url.isEmpty {
+                    if let storedPage = trying(operation: { try store.loadItems(type: .active, ids: [id]) })?.first,
+                       let storedURL = storedPage.url {
+                        url = storedURL
+                    }
+                }
+                if !url.isEmpty, url != "about:blank" {
+                    recentlyClosedTabURLs.insert(url, at: 0)
+                    if recentlyClosedTabURLs.count > Self.recentlyClosedTabsLimit {
+                        recentlyClosedTabURLs.removeLast()
+                    }
                 }
             }
             removeTabSnapshot(tabId: id)
@@ -1598,6 +1828,19 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         newTabAction(url: url)
     }
 
+    /// Pop the recently-closed entry at a specific index and reopen
+    /// it. Used by the inline quick-reopen items below the standard
+    /// "Reopen Closed Tab" entry so the user can pick any item from
+    /// the stack without first popping (and then having to undo) all
+    /// the ones above it.
+    func reopenRecentlyClosedTab(at index: Int) {
+        guard index >= 0 && index < recentlyClosedTabURLs.count else { return }
+        let url = recentlyClosedTabURLs.remove(at: index)
+        logger.info("reopenRecentlyClosedTab idx=\(index) url=\(url)")
+        hapticFeedback()
+        newTabAction(url: url)
+    }
+
     func closeAllTabsAction() {
         logger.info("closeAllTabsAction")
         hapticFeedback()
@@ -1617,6 +1860,44 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     /// Fires `navigator.reload()` on every open tab. Useful after the
     /// network reconnects, a sign-in state changes, or a remote-config
     /// updates.
+    /// Re-orders the `tabs` array alphabetically by each tab's host.
+    /// Resolves each tab's URL through the same three-level fallback
+    /// `closeTabs` uses (live page URL → savedURL mirror → persistent
+    /// store) so iOS-backgrounded tabs whose WebView state has been
+    /// reset still sort where they belong. Stable enough that two
+    /// tabs on the same host keep their existing relative order.
+    func sortTabsByDomainAction() {
+        logger.info("sortTabsByDomainAction count=\(self.tabs.count)")
+        hapticFeedback()
+        // Resolve URLs once up front. Calling the trying/loadItems
+        // path inside the sort closure would re-query the store on
+        // every comparison.
+        var domainByID: [PageInfo.ID: String] = [:]
+        for tab in tabs {
+            var url = tab.state.pageURL ?? ""
+            if url.isEmpty {
+                url = tab.savedURL
+            }
+            if url.isEmpty {
+                if let storedPage = trying(operation: { try store.loadItems(type: .active, ids: [tab.id]) })?.first,
+                   let storedURL = storedPage.url {
+                    url = storedURL
+                }
+            }
+            domainByID[tab.id] = tabDomainFromURL(url).lowercased()
+        }
+        withAnimation {
+            self.tabs.sort(by: { lhs, rhs in
+                let lDom = domainByID[lhs.id] ?? ""
+                let rDom = domainByID[rhs.id] ?? ""
+                if lDom == rDom {
+                    return false
+                }
+                return lDom < rDom
+            })
+        }
+    }
+
     func reloadAllTabsAction() {
         logger.info("reloadAllTabsAction count=\(self.tabs.count)")
         hapticFeedback()
@@ -1633,14 +1914,28 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     func closeOtherTabsAction() {
         logger.info("closeOtherTabsAction count=\(self.tabs.count) selected=\(self.selectedTab)")
         hapticFeedback()
-        let otherIDs = Set(self.tabs.compactMap { $0.id == self.selectedTab ? nil : $0.id })
+        // Exclude the selected tab AND every pinned tab. Pinned tabs
+        // survive Close Other Tabs — the modern-browser contract for
+        // user pins is that bulk-close actions spare them.
+        var otherIDs: Set<PageInfo.ID> = []
+        for tab in self.tabs {
+            if tab.id == self.selectedTab { continue }
+            if tab.isPinned { continue }
+            otherIDs.insert(tab.id)
+        }
         guard !otherIDs.isEmpty else { return }
         closeTabs(otherIDs)
     }
 
     func performCloseAllTabs() {
         logger.info("performCloseAllTabs count=\(self.tabs.count)")
-        let allIDs = Set(self.tabs.map(\.id))
+        // Spare pinned tabs — Close All Tabs deletes everything else.
+        var allIDs: Set<PageInfo.ID> = []
+        for tab in self.tabs {
+            if tab.isPinned { continue }
+            allIDs.insert(tab.id)
+        }
+        guard !allIDs.isEmpty else { return }
         closeTabs(allIDs)
     }
 
@@ -1687,14 +1982,86 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         }
     }
 
+    /// Count case-insensitive occurrences of `text` in the page's
+    /// rendered text and publish the result to `findMatchCount` for
+    /// the find-bar's count label. Empty queries reset the count to
+    /// zero so the label disappears.
+    @MainActor
+    func countFindMatches(_ text: String) async {
+        guard !text.isEmpty else {
+            findMatchCount = 0
+            return
+        }
+        guard let engine = currentViewModel?.navigator.webEngine else { return }
+        // Single-quote escape covers the only character that would
+        // unbalance the JS string literal we're about to inject.
+        let escaped = text
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+        let js = """
+        (function() {
+            var needle = '\(escaped)'.toLowerCase();
+            if (!needle) return 0;
+            var hay = (document.body && document.body.innerText) ? document.body.innerText.toLowerCase() : '';
+            var count = 0;
+            var pos = 0;
+            while ((pos = hay.indexOf(needle, pos)) !== -1) {
+                count++;
+                pos += needle.length;
+            }
+            return count;
+        })()
+        """
+        do {
+            let result = try await engine.evaluate(js: js)
+            if let value = result, let count = Int(value) {
+                findMatchCount = count
+            }
+        } catch {
+            // ignore — leave the previous count in place
+        }
+    }
+
     func newTabAction(url: String? = nil, inBackground: Bool = false) {
         logger.info("newTabAction url=\(url ?? "nil") inBackground=\(inBackground)")
         hapticFeedback()
+
+        // Snapshot the outgoing tab BEFORE we swap the WebView. On iOS
+        // WKWebView's `takeSnapshot` returns blank pixels once the view
+        // leaves the window hierarchy, and SwiftUI tears it down as
+        // soon as `selectedTab` changes — so capture now while the
+        // pixels are still on screen.
+        if let outgoing = currentViewModel {
+            // ALSO synchronously mirror the live state onto the
+            // viewModel's `saved*` fields. `BrowserView`'s
+            // `.onChange(of: state.pageURL)` handler does this in the
+            // happy path, but a fast Maestro / user gesture can move
+            // past Enter → switch-tab before the SwiftUI runloop has a
+            // chance to fire that `.onChange`. The snapshot below
+            // also relies on the WebView still being attached, so we
+            // tie everything to the same swap point: capture state
+            // now, then let the snapshot Task pick up the pixels
+            // before the view is torn down.
+            if let pageURL = outgoing.state.pageURL, !pageURL.isEmpty {
+                outgoing.savedURL = pageURL
+            }
+            if let pageTitle = outgoing.state.pageTitle, !pageTitle.isEmpty {
+                outgoing.savedTitle = pageTitle
+            }
+            Task { @MainActor in
+                await outgoing.captureSnapshot()
+            }
+        }
 
         // If requesting a blank tab, reuse an existing blank tab instead of creating another
         if url == nil {
             for tab in tabs {
                 if tab.state.url == nil && (tab.state.pageURL == nil || tab.state.pageURL == "about:blank") {
+                    // Reused blank tab: arm its focus signal so
+                    // `BrowserView` will pop the keyboard the moment it
+                    // becomes visible — same UX as a freshly-created
+                    // blank tab.
+                    tab.shouldFocusURLBar = true
                     self.selectedTab = tab.id
                     logTabs()
                     return
@@ -1704,6 +2071,12 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
 
         let info = PageInfo(url: url)
         let vm = newViewModel(info)
+        // Newly-created blank tabs auto-focus the URL bar so the user
+        // can begin typing immediately. URL-having tabs don't, because
+        // they have a real page to load.
+        if url == nil {
+            vm.shouldFocusURLBar = true
+        }
         self.tabs.append(vm)
         // Stay on the current tab when explicitly opening in the
         // background. Blank tabs always foreground because the user just
@@ -1834,6 +2207,81 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         #endif
     }
 
+    /// Hands the current page URL to the system's default browser —
+    /// the modern-browser escape hatch when a site doesn't render in
+    /// this WebView (paywalled streaming, OAuth flows, plugin-required
+    /// content). On iOS this lands in Safari (or whatever the user
+    /// set as their default browser in iOS Settings). On Android we
+    /// filter our own package out of the chooser so the user isn't
+    /// offered a redundant "open in Net Skip" entry.
+    /// Hand the current page URL to Google Translate so the user can
+    /// read it in their preferred language. Uses Google Translate's
+    /// public website-translation endpoint, which loads through any
+    /// modern user agent without account requirements. Falls back
+    /// gracefully (no-op) when there's no live page URL.
+    func translatePageAction() {
+        guard let pageURL = currentState?.pageURL, !pageURL.isEmpty,
+              let encoded = pageURL.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryAllowed) else { return }
+        logger.info("translatePageAction: \(pageURL)")
+        hapticFeedback()
+        // `op=websites` is the modern Google Translate URL contract
+        // for translating an entire site; `tl=auto` lets Translate
+        // pick the user's locale automatically.
+        let translateURL = "https://translate.google.com/?sl=auto&tl=auto&op=websites&u=\(encoded)"
+        openURL(url: translateURL, newTab: false)
+    }
+
+    func openInExternalBrowserAction() {
+        guard let pageURL = currentState?.pageURL,
+              !pageURL.isEmpty,
+              let url = URL(string: pageURL) else { return }
+        logger.info("openInExternalBrowserAction: \(pageURL)")
+        hapticFeedback()
+        #if SKIP
+        let ctx = ProcessInfo.processInfo.androidContext
+        let selfPackage = ctx.packageName
+        let baseIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(pageURL))
+        let pm = ctx.packageManager
+        let resolveInfos = pm.queryIntentActivities(baseIntent, 0)
+        // Build one explicit Intent per non-self handler so the chooser
+        // shows only third-party browsers. If we're the only handler
+        // installed, fall back to launching the base intent so the user
+        // still gets a system response rather than a silent no-op.
+        var targeted: [android.content.Intent] = []
+        for info in resolveInfos {
+            let pkg = info.activityInfo.packageName
+            if pkg == selfPackage { continue }
+            let explicit = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(pageURL))
+            explicit.setPackage(pkg)
+            targeted.append(explicit)
+        }
+        if targeted.isEmpty {
+            // No third-party browser installed — fall back to the
+            // default chooser (will include us; the user can't avoid it).
+            baseIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(baseIntent)
+        } else if targeted.count == 1 {
+            // Exactly one non-self browser — launch directly, no
+            // chooser needed (this is the case on most Android setups
+            // where Chrome is the only other browser installed).
+            let only = targeted[0]
+            only.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(only)
+        } else {
+            // Multiple third-party browsers — show the system chooser.
+            // We accept that self may appear in the chooser; building
+            // a strict exclude-self chooser requires constructing a
+            // Kotlin native array which Skip's transpilation doesn't
+            // surface cleanly from Swift.
+            let chooser = android.content.Intent.createChooser(baseIntent, "Open in browser")
+            chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(chooser)
+        }
+        #else
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+        #endif
+    }
+
     func pasteAndGoAction() {
         logger.info("pasteAndGoAction")
         hapticFeedback()
@@ -1899,11 +2347,51 @@ struct TitleView : View {
     var savedTitle: String = ""
     var savedURL: String = ""
 
+    /// User-pinned tab — shows a pin badge on its tab card and stays
+    /// behind a "Closing a pinned tab" confirmation. Session-local for
+    /// now; persistence across launches is a future iteration.
+    var isPinned: Bool = false
+
+    /// One-shot signal set by `newTabAction` when the user creates (or
+    /// reuses) a blank tab — `BrowserView` honors it by focusing the
+    /// URL bar so the keyboard comes up and the user can type their
+    /// query immediately, then clears the flag. Cleared after first
+    /// observation so subsequent appearances don't re-focus.
+    var shouldFocusURLBar: Bool = false
+
     public init(id: PageInfo.ID, navigator: WebViewNavigator, configuration: WebEngineConfiguration, store: WebBrowserStore) {
         self.id = id
         self.navigator = navigator
         self.configuration = configuration
         self.store = store
+    }
+
+    /// PNG path on disk where this tab's grid-overview snapshot lives.
+    /// Stored under the Caches directory so iOS / Android may evict it
+    /// under storage pressure without breaking the app.
+    public static func snapshotPath(for tabId: PageInfo.ID) -> URL {
+        let dir = URL.cachesDirectory.appendingPathComponent("tab-snapshots")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("\(tabId).png")
+    }
+
+    /// Capture a thumbnail of the currently-attached `WKWebView` /
+    /// Android `WebView` and write it to `snapshotPath(for: id)`.
+    /// Called from `BrowserView` on page-load completion so the snapshot
+    /// is fresh when the user opens the tab grid — capturing on tab
+    /// switch is too late on iOS, where the leaving tab's WKWebView is
+    /// already detached and `takeSnapshot` returns blank pixels.
+    @MainActor
+    public func captureSnapshot() async {
+        guard let webEngine = navigator.webEngine else { return }
+        do {
+            let config = SkipWebSnapshotConfiguration(snapshotWidth: 300)
+            let snapshot = try await webEngine.takeSnapshot(configuration: config)
+            try snapshot.pngData.write(to: Self.snapshotPath(for: id))
+        } catch {
+            // Best-effort — a missing snapshot just falls back to the
+            // domain-letter avatar in the tab grid.
+        }
     }
 }
 
