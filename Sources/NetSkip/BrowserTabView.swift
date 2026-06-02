@@ -225,15 +225,18 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     }
 
     func browserTabView() -> some View {
-        /// We need to wrap a separate BrowserView because @AppStorage does not trigger `onChange` events, which we need to synchronize between the browser state and the preferences
+        // Both platforms now use SwiftUI's TabView (Skip translates it
+        // to a Compose Pager on Android). We previously had a custom
+        // paged ScrollView on iOS for "swipe past last tab spawns a
+        // new tab" with adjacent-tab peek; the user reverted that —
+        // they prefer the standard TabView for consistency between
+        // the two platforms.
         TabView(selection: $selectedTab) {
             ForEach($tabs) { tab in
                 BrowserView(configuration: configuration, store: store, submitURL: { self.submitURL(text: $0) }, viewModel: tab, showSettings: $showSettings, showBottomBar: $showBottomBar)
             }
         }
-        //.toolbarBackground(Color.clear, for: .bottomBar)
-        //.toolbarBackground(.visible, for: .bottomBar) // needed to make toolbarBackground with color show up
-        .background(LinearGradient(colors: [currentState?.themeColor ?? Color.clear, Color.clear], startPoint: .top, endPoint: .center)) // changes the status bar and toolbar
+        .background(LinearGradient(colors: [currentState?.themeColor ?? Color.clear, Color.clear], startPoint: .top, endPoint: .center))
         #if !SKIP
         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
         .indexViewStyle(PageIndexViewStyle(backgroundDisplayMode: .automatic))
@@ -248,16 +251,13 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         #endif
         .onChange(of: currentState?.scrollingDown) {
             let scrollingDown = currentState?.scrollingDown == false
-            // whenever we change scrolling, show/hide the bottom bar depending on the direction
             if self.showBottomBar != scrollingDown {
                 withAnimation {
-                    //logger.log("scrollingDown: \(scrollingDown) offset: \(currentState?.scrollingOffset ?? 0.0)")
                     self.showBottomBar = scrollingDown
                 }
             }
         }
         .onChange(of: selectedTab) { oldTab, newTab in
-            // Capture snapshot of the tab being left
             if let oldVM = tabs.first(where: { $0.id == oldTab }) {
                 if oldVM.state.url != nil {
                     captureTabSnapshot(tab: oldVM)

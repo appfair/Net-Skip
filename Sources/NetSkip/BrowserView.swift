@@ -273,12 +273,19 @@ import NetSkipModel
     }
 
     func urlBarView() -> some View {
+        // Container background matches the toolbar's `urlBarBackground`
+        // so the URL bar seamlessly blends into the chrome strip; the
+        // URL field itself sits inside as a pure-white rounded
+        // rectangle with a subtle shadow, framed by the chrome on
+        // either side. Result: chrome reads as one continuous bar
+        // with a "search pill" floating on top.
         VStack(spacing: 0.0) {
             if showBottomBar {
                 Divider()
             }
             urlBarComponentView()
         }
+        .background(showBottomBar ? urlBarBackground : Color.clear)
             #if !SKIP
             .onChange(of: state.pageURL, updatePageURL)
             .onChange(of: state.pageTitle, updatePageTitle)
@@ -320,20 +327,28 @@ import NetSkipModel
 
     @ViewBuilder func urlBarComponentView() -> some View {
         ZStack(alignment: .center) {
-            // Background capsule with progress bar
+            // Background "search pill". A RoundedRectangle with a
+            // 14pt corner gives a more modern, less oval look than
+            // the previous Capsule (which is fully rounded). White
+            // fill provides clear input contrast against the chrome,
+            // and the subtle shadow lifts the pill off the toolbar
+            // background — DuckDuckGo / Safari-style.
             ZStack(alignment: .bottom) {
-                Capsule()
-                    .fill(showBottomBar ? urlBarBackground : .clear)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(showBottomBar ? Color.white : .clear)
+                    .shadow(color: Color.black.opacity(showBottomBar ? 0.08 : 0.0), radius: 3.0, x: 0.0, y: 1.0)
 
                 ProgressView(value: state.estimatedProgress ?? 0.0)
                     .progressViewStyle(.linear)
                     .frame(height: 2.0)
                     .tint(.accentColor)
                     .opacity(state.isLoading ? 1.0 : 0.0)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .frame(height: showBottomBar ? 44.0 : 25.0)
+            .frame(height: showBottomBar ? 40.0 : 25.0)
             .padding(.top, 4.0)
-            .padding(.bottom, 0.0)
+            .padding(.bottom, 4.0)
+            .padding(.horizontal, showBottomBar ? 12.0 : 0.0)
 
             // The TextField is ALWAYS in the view hierarchy so taps
             // always land on it and @FocusState works on iOS.
@@ -445,7 +460,12 @@ import NetSkipModel
                     .accessibilityLabel(Text("Reload page", bundle: .module, comment: "accessibility label for the URL bar reload button"))
                 }
             }
-            .padding(.horizontal, 12.0)
+            // Inner inset for the TextField + leading/trailing icons.
+            // Sized so the field text and the clear/reload button
+            // breathe well off the rounded-rectangle edges instead of
+            // crowding the corners — the user explicitly asked for
+            // more inner padding here.
+            .padding(.horizontal, 20.0)
 
             // Domain overlay: visible only when NOT focused.
             // allowsHitTesting(false) lets taps fall through to the TextField.
@@ -488,7 +508,6 @@ import NetSkipModel
                 .opacity(showBottomBar ? 1.0 : 0.0)
             }
         }
-        .padding(.horizontal, showBottomBar ? 8.0 : 0.0)
         .contextMenu {
             // Long-press → quick URL actions, matching the Safari /
             // Chrome / DuckDuckGo pattern. iOS's native UITextField edit
