@@ -71,7 +71,7 @@ import NetSkipModel
                         }
                     }
                 })
-                let showSuggestions = state.pageURL == nil || isURLBarFocused
+                let showSuggestions = state.url == nil || isURLBarFocused
                 if showSuggestions {
                     suggestionsView()
                         .frame(maxHeight: .infinity)
@@ -165,7 +165,7 @@ import NetSkipModel
         }
 
         if let url = webView.url {
-            updatePageURL(nil, url.absoluteString)
+            updatePageURL(nil, url)
         }
 
         webView.configuration.defaultWebpagePreferences.allowsContentJavaScript = settings.enableJavaScript
@@ -181,24 +181,25 @@ import NetSkipModel
         #endif
     }
 
-    func updatePageURL(_ oldURL: String?, _ newURL: String?) {
+    func updatePageURL(_ oldURL: URL?, _ newURL: URL?) {
         if let newURL = newURL {
-            logger.log("changed pageURL to: \(newURL)")
+            let urlString = newURL.absoluteString
+            logger.log("changed pageURL to: \(urlString)")
             // Treat the WKWebView's "about:blank" placeholder as no
             // URL — a freshly-created blank tab should show an empty
             // URL bar (matching Safari / Chrome / DuckDuckGo) so the
             // user can begin typing without first clearing the field.
             // Internal "about:" routes aren't user-meaningful either.
-            let blank = newURL.isEmpty || newURL == "about:blank"
-            viewModel.urlTextField = blank ? "" : newURL
+            let blank = urlString.isEmpty || urlString == "about:blank"
+            viewModel.urlTextField = blank ? "" : urlString
             // Mirror onto the view-model's saved field so the tab card
             // in the overview still shows the right domain after the
             // user leaves this tab (the WebView's live `state.url` is
             // not always populated for background tabs).
-            viewModel.savedURL = blank ? "" : newURL
+            viewModel.savedURL = blank ? "" : urlString
             showBottomBar = true // when the URL changes, always show the bottom bar again
             if var pageInfo = trying(operation: { try store.loadItems(type: .active, ids: [viewModel.id]) })?.first {
-                pageInfo.url = blank ? nil : newURL
+                pageInfo.url = blank ? nil : urlString
                 _ = trying { try store.saveItems(type: .active, items: [pageInfo]) }
             }
         }
@@ -236,6 +237,22 @@ import NetSkipModel
             // open will re-snapshot whatever is still active.
             Task { @MainActor in
                 await viewModel.captureSnapshot()
+            }
+            // Once the title is in we can also try to extract a
+            // higher-quality favicon URL from the page's own
+            // `<link rel="…icon…">` and `<meta property="og:image">`
+            // tags. This runs in the page context; the JS-discovered
+            // URL gets fetched and replaces whatever the direct
+            // /favicon.ico fallback put in the cache. Now enabled on
+            // both platforms — the earlier Android instability was
+            // traced to a `%lld`-format pluralization crash in
+            // SkipUI's localized Text, not to this `evaluate(js:)`
+            // call.
+            let pageURL = viewModel.state.url
+            if let engine = viewModel.navigator.webEngine {
+                Task { @MainActor in
+                    await NetSkipFaviconCache.shared.discoverHighResIcon(in: engine, pageURL: pageURL)
+                }
             }
         }
     }
@@ -287,13 +304,13 @@ import NetSkipModel
         }
         .background(showBottomBar ? urlBarBackground : Color.clear)
             #if !SKIP
-            .onChange(of: state.pageURL, updatePageURL)
+            .onChange(of: state.url, updatePageURL)
             .onChange(of: state.pageTitle, updatePageTitle)
             #else
             // workaround onChange() expects an Equatable, which Optional does not conform to
             // https://github.com/skiptools/skip-ui/issues/27
-            .onChange(of: state.pageURL ?? fallbackURL) {
-                updatePageURL($0, $1)
+            .onChange(of: state.url?.absoluteString ?? fallbackURL) { oldStr, newStr in
+                updatePageURL(URL(string: oldStr), URL(string: newStr))
             }
             .onChange(of: state.pageTitle ?? "SENTINEL_TITLE") {
                 updatePageTitle($0, $1)
@@ -345,10 +362,29 @@ import NetSkipModel
                     .opacity(state.isLoading ? 1.0 : 0.0)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .frame(height: showBottomBar ? 40.0 : 25.0)
+            // ~30% taller (40 → 52) gives the search pill a more
+            // touch-friendly feel without dominating the chrome.
+            .frame(height: showBottomBar ? 52.0 : 32.0)
             .padding(.top, 4.0)
             .padding(.bottom, 4.0)
             .padding(.horizontal, showBottomBar ? 12.0 : 0.0)
+
+            // Favicon pinned to the LEADING edge of the URL bar
+            // capsule (not crowding the centered URL text). Visible
+            // any time the URL bar is collapsed AND the page has a
+            // real URL — Safari / Chrome / DuckDuckGo layout. Hit
+            // testing is disabled so taps fall through to the
+            // underlying TextField for focus.
+            if showBottomBar, !isURLBarFocused,
+               let pageURL = state.url,
+               pageURL.absoluteString != "about:blank" {
+                HStack {
+                    FaviconView(urlString: pageURL.absoluteString, size: 24.0, cornerRadius: 5.0)
+                        .padding(.leading, 24.0)
+                    Spacer()
+                }
+                .allowsHitTesting(false)
+            }
 
             // The TextField is ALWAYS in the view hierarchy so taps
             // always land on it and @FocusState works on iOS.
@@ -358,7 +394,8 @@ import NetSkipModel
             HStack(spacing: 6) {
                 urlTextFieldView()
                 .textFieldStyle(.plain)
-                .font(.system(size: isURLBarFocused ? 16.0 : 15.0))
+                // ~30% larger text inside the URL bar — 16/15 → 21/20
+                .font(.system(size: isURLBarFocused ? 21.0 : 20.0))
                 .foregroundStyle(isURLBarFocused ? Color.primary : Color.clear)
                 .accessibilityIdentifier("field.url")
                 #if !SKIP
@@ -429,13 +466,13 @@ import NetSkipModel
                     // Stop loading button
                     Button(action: { self.viewModel.navigator.stopLoading() }, label: {
                         Image("xmark", bundle: .module)
-                            .font(.system(size: 14))
+                            .font(.system(size: 18))
                             .foregroundStyle(.secondary)
                     })
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("button.url.stop")
                     .accessibilityLabel(Text("Stop loading", bundle: .module, comment: "accessibility label for the URL bar stop-loading button"))
-                } else if state.pageURL != nil {
+                } else if state.url != nil {
                     // Reload button — tap reloads normally, long-press
                     // reveals a "Hard Reload" item that clears the cache
                     // before reloading. Mirrors the long-press menus on
@@ -451,7 +488,7 @@ import NetSkipModel
                         .accessibilityIdentifier("menu.hardReload")
                     } label: {
                         Image("arrow.clockwise", bundle: .module)
-                            .font(.system(size: 14))
+                            .font(.system(size: 18))
                             .foregroundStyle(.secondary)
                     } primaryAction: {
                         self.viewModel.navigator.reload()
@@ -476,30 +513,24 @@ import NetSkipModel
                 // brand-new tab would render the literal string
                 // "about:blank" instead of the search placeholder.
                 let hasRealURL: Bool = {
-                    if let pageURL = state.pageURL {
-                        return !pageURL.isEmpty && pageURL != "about:blank"
+                    if let pageURL = state.url {
+                        return pageURL.absoluteString != "about:blank"
                     }
                     return false
                 }()
                 HStack(spacing: 4) {
-                    if hasRealURL && !state.isLoading {
-                        Image("lock", bundle: .module)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-
                     if state.isLoading {
                         Text("Loading...", bundle: .module, comment: "URL bar text shown while a page is loading")
-                            .font(.system(size: 15))
+                            .font(.system(size: 20))
                             .foregroundStyle(.secondary)
-                    } else if hasRealURL, let pageURL = state.pageURL {
-                        Text(domainFromURL(pageURL))
-                            .font(.system(size: 15))
+                    } else if hasRealURL, let pageURL = state.url {
+                        Text(domainFromURL(pageURL.absoluteString))
+                            .font(.system(size: 20))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                     } else {
                         Text("Search or enter website name", bundle: .module, comment: "placeholder string for URL bar")
-                            .font(.system(size: 15))
+                            .font(.system(size: 20))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -514,8 +545,8 @@ import NetSkipModel
             // menu still takes over once the bar is focused (because
             // the TextField captures the long-press at that point), so
             // this only competes for the unfocused state.
-            if let pageURL = state.pageURL, !pageURL.isEmpty {
-                Button(action: { urlBarCopyURLAction(pageURL) }) {
+            if let pageURL = state.url {
+                Button(action: { urlBarCopyURLAction(pageURL.absoluteString) }) {
                     Label {
                         Text("Copy URL", bundle: .module, comment: "menu label for copying the current page URL to the clipboard")
                     } icon: {
@@ -592,7 +623,7 @@ import NetSkipModel
                         // "about:blank" as no URL so Cancel on a fresh
                         // blank tab leaves the bar empty rather than
                         // re-stamping the placeholder URL.
-                        let restore = state.pageURL ?? ""
+                        let restore = state.url?.absoluteString ?? ""
                         self.viewModel.urlTextField = restore == "about:blank" ? "" : restore
                     }, label: {
                         Text("Cancel", bundle: .module, comment: "cancel button for dismissing suggestions")
@@ -686,7 +717,8 @@ import NetSkipModel
     }
 
     func addPageToHistory() {
-        if let url = state.pageURL, let title = state.pageTitle {
+        if let pageURL = state.url, let title = state.pageTitle {
+            let url = pageURL.absoluteString
             logger.info("addPageToHistory: \(title) \(url)")
             trying {
                 // Update existing history entry if URL already exists, otherwise create new

@@ -70,13 +70,16 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     /// Height of the bottom chrome bar (back/tabs/menu/bookmarks/forward
     /// HStack). Shared with `BrowserView` so the URL bar can pad itself
     /// up by exactly this many points and sit flush against the toolbar.
-    static let bottomToolbarHeight: CGFloat = 48.0
+    // ~30% taller than before (48 → 62) — gives the toolbar / URL
+    // bar a friendlier, more touchable feel without dominating the
+    // viewport. Same scale applied to icon and font sizes below.
+    static let bottomToolbarHeight: CGFloat = 62.0
 
     /// Natural height of the URL bar capsule when shown — matches the
     /// 44pt capsule + 4pt top padding inside `urlBarComponentView` so
     /// there's no centered-frame gap on Compose. Collapses to zero on
     /// scroll-down so the WebView occupies the full screen.
-    static let urlBarHeight: CGFloat = 48.0
+    static let urlBarHeight: CGFloat = 62.0
 
     @State var confirmCloseAllTabs: Bool = false
     @State var isCurrentPageFavorited: Bool = false
@@ -198,31 +201,49 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     /// wrapper. Collapses to zero height when `showBottomBar` is off so
     /// the URL bar's compact slim mode is the only thing left visible.
     @ViewBuilder func bottomToolbar() -> some View {
+        // Six-item bottom toolbar: back, forward, new tab, share,
+        // tab list, "..." more menu. Each item gets a fixed square
+        // hit-target so different glyph aspect ratios (a thin
+        // chevron next to a chunky share arrow next to a circle of
+        // dots) don't render at visually different sizes — the user
+        // explicitly asked for uniform toolbar buttons.
         HStack(spacing: 0) {
             backButton()
-            Spacer()
-            tabsButton()
-            Spacer()
-            ellipsisMenu()
-            Spacer()
-            showHistoryFavoritesButton()
+                .frame(width: toolbarItemSize, height: toolbarItemSize)
             Spacer()
             forwardButton()
+                .frame(width: toolbarItemSize, height: toolbarItemSize)
+            Spacer()
+            newTabToolbarButton()
+                .frame(width: toolbarItemSize, height: toolbarItemSize)
+            Spacer()
+            shareToolbarButton()
+                .frame(width: toolbarItemSize, height: toolbarItemSize)
+            Spacer()
+            tabsButton()
+                .frame(width: toolbarItemSize, height: toolbarItemSize)
+            Spacer()
+            ellipsisMenu()
+                .frame(width: toolbarItemSize, height: toolbarItemSize)
         }
         .labelStyle(.iconOnly)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
         .background(urlBarBackground)
-        // Fixed height when shown; collapses to 0 when the user scrolls
-        // down. SwiftUI's natural-sized `nil` height doesn't transpile
-        // cleanly to Compose, and `.infinity` greedily eats the
-        // WebView's space on iOS — so we just pick a height that
-        // matches the standard system bottom bar.
-        .frame(height: showBottomBar ? 48.0 : 0.0)
+        // Fixed height when shown; collapses to 0 when the user
+        // scrolls down. SwiftUI's natural-sized `nil` height doesn't
+        // transpile cleanly to Compose, and `.infinity` greedily
+        // eats the WebView's space on iOS.
+        .frame(height: showBottomBar ? Self.bottomToolbarHeight : 0.0)
         .opacity(showBottomBar ? 1.0 : 0.0)
         .clipped()
     }
+
+    /// Uniform square hit-target for every bottom-toolbar item.
+    /// Without this, glyphs with different intrinsic aspect ratios
+    /// would visibly disagree on size, and the row would look ragged.
+    let toolbarItemSize: CGFloat = 44.0
 
     func browserTabView() -> some View {
         // Both platforms now use SwiftUI's TabView (Skip translates it
@@ -373,6 +394,13 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     // MARK: - Tab Overview
 
     func activeTabsView() -> some View {
+        // `preferredColorScheme(.dark)` forces dark Material / iOS
+        // chrome for the whole sheet — including the top app bar
+        // background and icon colors — so the navigation strip
+        // stops being a light-on-dark island sitting above the
+        // dark tabs grid. iOS already pinned this via
+        // `.toolbarBackground(...)`/`toolbarColorScheme(...)` below,
+        // but those are iOS-only modifiers; this works on both.
         NavigationStack {
             VStack(spacing: 0) {
                 if settings.enableMiniApps {
@@ -400,11 +428,28 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             // Whole tabs sheet uses a hard-coded dark background, so
             // semantic system colors (placeholder text, secondary
             // labels, separators) must resolve to their dark-mode
-            // values — otherwise a Light-Mode device renders the
-            // search-bar placeholder dark-grey on dark-grey.
+            // values — otherwise a Light-Mode iOS device renders the
+            // search-bar placeholder dark-grey on dark-grey. On
+            // Skip / Android the equivalent is achieved by
+            // explicitly tinting the search field's placeholder in
+            // `tabSearchField` (Compose ignores the SwiftUI
+            // colorScheme env in some Skip 1.5 transpilations).
             .environment(\.colorScheme, .dark)
             #endif
-            .navigationTitle(Text(tabsSegment == 1 || !settings.enableMiniApps ? "\(tabs.count) Tabs" : "Mini Apps", bundle: .module, comment: "tabs title"))
+            // Pluralization via Swift dispatch rather than xcstrings
+            // `variations.plural.{one,other}`. Skip-Lite's runtime
+            // chokes on `%lld` format-specifier strings inside
+            // plural variations (`MissingFormatArgumentException`
+            // out of Kotlin's `String.format`), so the cleanest
+            // cross-platform answer is to pick the right singular /
+            // plural source string ourselves; each variant lives as
+            // a standalone entry in Localizable.xcstrings with its
+            // own translations.
+            .navigationTitle(tabsSegment == 1 || !settings.enableMiniApps
+                ? (tabs.count == 1
+                    ? Text("1 Tab", bundle: .module, comment: "tabs sheet navigation title when exactly one tab is open")
+                    : Text("\(tabs.count) Tabs", bundle: .module, comment: "tabs sheet navigation title when more than one tab is open; argument is the count"))
+                : Text("Mini Apps", bundle: .module, comment: "tabs sheet title when on the Mini Apps segment"))
             #if !SKIP
             .navigationBarTitleDisplayMode(.inline)
             // The tab grid below has a hard-coded dark background
@@ -446,6 +491,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         #if !SKIP
         .presentationDetents([.large])
         #endif
+        .preferredColorScheme(.dark)
     }
 
     var pagesTabContent: some View {
@@ -489,7 +535,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         if query.isEmpty { return tabs }
         return tabs.filter { tab in
             let titleSource = tab.state.pageTitle ?? tab.savedTitle
-            let urlSource = tab.state.pageURL ?? tab.state.url?.absoluteString ?? tab.savedURL
+            let urlSource = tab.state.url?.absoluteString ?? tab.savedURL
             return titleSource.lowercased().contains(query) || urlSource.lowercased().contains(query)
         }
     }
@@ -499,7 +545,12 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             Image("magnifyingglass", bundle: .module)
                 .foregroundStyle(Color.white.opacity(0.6))
             TextField(text: $tabSearchText) {
+                // Skip / Android: Compose's TextField propagates the
+                // placeholder's `.foregroundStyle` to the hint color,
+                // so we tint it explicitly here to avoid the
+                // dark-grey-on-dark default. iOS picks this up too.
                 Text("Search Tabs", bundle: .module, comment: "placeholder text for the search field in the tab overview")
+                    .foregroundStyle(Color.white.opacity(0.55))
             }
             .textFieldStyle(.plain)
             .foregroundStyle(Color.white)
@@ -664,8 +715,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             // down the leaving BrowserView's WebView, neither state
             // nor pixels are recoverable.
             if let outgoing = currentViewModel, outgoing.id != tab.id {
-                if let pageURL = outgoing.state.pageURL, !pageURL.isEmpty {
-                    outgoing.savedURL = pageURL
+                if let pageURL = outgoing.state.url {
+                    outgoing.savedURL = pageURL.absoluteString
                 }
                 if let pageTitle = outgoing.state.pageTitle, !pageTitle.isEmpty {
                     outgoing.savedTitle = pageTitle
@@ -680,39 +731,32 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             }
         } label: {
             VStack(alignment: .leading, spacing: 0) {
-                // Title bar
-                HStack(spacing: 4) {
+                // Title bar — sized up so the title text is readable
+                // at a glance and the close button is a fingertip
+                // target (not the previous 10-point pinhole).
+                HStack(spacing: 6) {
                     if tab.isPinned {
                         Image("push_pin", bundle: .module)
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(Color.white)
                             .accessibilityIdentifier("indicator.tab.pinned")
                     }
-                    if !urlString.isEmpty {
-                        Image("lock", bundle: .module)
-                            .font(.system(size: 9))
-                            .foregroundStyle(Color.white.opacity(0.7))
-                    }
                     Text(title.isEmpty ? (domain.isEmpty ? "New Tab" : domain) : title)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(Color.white)
                         .lineLimit(1)
-                    Spacer(minLength: 4)
-                    // Close button
-                    Button {
-                        removeTabSnapshot(tabId: tab.id)
-                        closeTabs([tab.id])
-                    } label: {
-                        Image("xmark", bundle: .module)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.6))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("button.tab.close")
-                    .accessibilityLabel(Text("Close tab", bundle: .module, comment: "accessibility label for closing an individual tab from the tab overview"))
+                    Spacer(minLength: 6)
+                    // Reserve trailing space inside the header for
+                    // the close button that's rendered as a sibling
+                    // overlay below. We can't put the actual Button
+                    // here because it's inside the outer card Button's
+                    // label, and on iOS the outer Button consumes the
+                    // tap before the nested Button sees it.
+                    Color.clear
+                        .frame(width: 32, height: 32)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
                 .background(
                     isActive
                         ? Color.accentColor
@@ -720,7 +764,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 )
 
                 // Snapshot preview area
-                ZStack {
+                ZStack(alignment: .topLeading) {
                     Color(white: 0.95)
                     if let snapshotImage = snapshotImage {
                         Image(uiImage: snapshotImage)
@@ -754,9 +798,32 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                             .font(.system(size: 28))
                             .foregroundStyle(Color.gray.opacity(0.4))
                     }
+
                 }
                 .frame(height: 180)
                 .clipped()
+                // Favicon overlay — sits above the snapshot preview
+                // via `.overlay(alignment:)` rather than as a ZStack
+                // sibling. On iOS the ZStack-sibling layout was being
+                // covered by the aspect-fill snapshot Image, even
+                // though the favicon was declared later in code (the
+                // greedy intrinsic-size resolution for `.aspectRatio
+                // (.fill)` pushes drawn pixels above sibling content
+                // in some SwiftUI iOS 17/26 builds). `.overlay` is an
+                // explicit z-order layer and renders cleanly on both
+                // platforms.
+                .overlay(alignment: .topLeading) {
+                    if !urlString.isEmpty {
+                        FaviconView(urlString: urlString, size: 26.0, cornerRadius: 6.0)
+                            .padding(7)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(Color.white)
+                                    .shadow(color: Color.black.opacity(0.18), radius: 3, y: 1)
+                            )
+                            .padding(10)
+                    }
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
@@ -766,6 +833,33 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             .shadow(color: .black.opacity(0.3), radius: 3, y: 2)
         }
         .buttonStyle(.plain)
+        // Close button rendered as a SIBLING overlay outside the
+        // outer Button's label — iOS's button hit-testing consumes
+        // every tap inside the parent label first, so a nested
+        // close Button never gets the gesture. As an overlay on the
+        // tab card itself, it owns its taps cleanly on both
+        // platforms. The `Color.clear` spacer in the header reserves
+        // the trailing width so the title text doesn't run under
+        // the X.
+        .overlay(alignment: .topTrailing) {
+            Button {
+                removeTabSnapshot(tabId: tab.id)
+                closeTabs([tab.id])
+            } label: {
+                Image("xmark", bundle: .module)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.9))
+                    .frame(width: 32, height: 32)
+                    #if !SKIP
+                    .contentShape(Rectangle())
+                    #endif
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 6)
+            .padding(.top, 0)
+            .accessibilityIdentifier("button.tab.close")
+            .accessibilityLabel(Text("Close tab", bundle: .module, comment: "accessibility label for closing an individual tab from the tab overview"))
+        }
         .contextMenu {
             Button(action: { copyURLForTab(tab) }) {
                 Label {
@@ -775,7 +869,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 }
             }
             .accessibilityIdentifier("menu.tabCard.copyURL")
-            .disabled((tab.state.pageURL ?? tab.savedURL).isEmpty)
+            .disabled((tab.state.url?.absoluteString ?? tab.savedURL).isEmpty)
 
             if tab.isPinned {
                 Button(action: { toggleTabPin(tab) }) {
@@ -843,7 +937,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     /// currently selected one — needed for the tab-card context menu,
     /// where the user might right-click a background tab.
     func copyURLForTab(_ tab: BrowserViewModel) {
-        let url = tab.state.pageURL ?? tab.savedURL
+        let url = tab.state.url?.absoluteString ?? tab.savedURL
         guard !url.isEmpty else { return }
         logger.info("copyURLForTab id=\(tab.id) url=\(url)")
         hapticFeedback()
@@ -940,8 +1034,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     }
 
     var currentURL: String? {
-        if let url = currentState?.pageURL {
-            return url
+        if let url = currentState?.url {
+            return url.absoluteString
         }
 
         if let url = currentWebView?.url {
@@ -1055,14 +1149,16 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         })
     }
 
-    let toolbarIconSize: CGFloat = 22.0
+    // Toolbar icon point size — 22 → 28 (~30% larger) gives a more
+    // touch-friendly target without making any one icon dominate.
+    let toolbarIconSize: CGFloat = 28.0
 
     @ViewBuilder func backButton() -> some View {
         let enabled = currentState?.canGoBack == true
         let backLabel = Label {
             Text("Back", bundle: .module, comment: "back button label")
         } icon: {
-            Image("chevron.left", bundle: .module)
+            Image("arrow_back_ios_new", bundle: .module)
                 .font(.system(size: toolbarIconSize))
         }
 
@@ -1096,7 +1192,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         let forwardLabel = Label {
             Text("Forward", bundle: .module, comment: "forward button label")
         } icon: {
-            Image("chevron.right", bundle: .module)
+            Image("arrow_forward_ios", bundle: .module)
                 .font(.system(size: toolbarIconSize))
         }
 
@@ -1130,6 +1226,41 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             }
         }
         .accessibilityIdentifier("button.history.favorites")
+    }
+
+    /// Top-level toolbar "new tab" button. Opens a fresh blank tab
+    /// with the URL bar auto-focused (via `shouldFocusURLBar` set
+    /// inside `newTabAction`) so the user can type immediately.
+    @ViewBuilder func newTabToolbarButton() -> some View {
+        Button(action: { newTabAction() }) {
+            Label {
+                Text("New Tab", bundle: .module, comment: "toolbar button label for opening a new blank tab")
+            } icon: {
+                Image("add_2", bundle: .module)
+                    .font(.system(size: toolbarIconSize))
+            }
+        }
+        .accessibilityIdentifier("button.newTab")
+        .accessibilityLabel(Text("New Tab", bundle: .module, comment: "accessibility label for the toolbar new-tab button"))
+    }
+
+    /// Top-level toolbar share button. Hands the current page URL
+    /// off to the platform share sheet via `ShareLink`. Disabled
+    /// when there's nothing meaningful to share (blank tab).
+    @ViewBuilder func shareToolbarButton() -> some View {
+        let url = currentState?.url?.absoluteString ?? ""
+        let canShare = !url.isEmpty && url != "about:blank"
+        ShareLink(item: canShare ? url : fallbackURL) {
+            Label {
+                Text("Share", bundle: .module, comment: "toolbar share button label")
+            } icon: {
+                Image("ios_share", bundle: .module)
+                    .font(.system(size: toolbarIconSize))
+            }
+        }
+        .disabled(!canShare)
+        .accessibilityIdentifier("button.share")
+        .accessibilityLabel(Text("Share page", bundle: .module, comment: "accessibility label for the toolbar share button"))
     }
 
     @ViewBuilder func tabsButton() -> some View {
@@ -1284,7 +1415,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             Button(action: {
                 executeFindOnPage(findText, backwards: true)
             }) {
-                Image("chevron.left", bundle: .module)
+                Image("arrow_back_ios_new", bundle: .module)
                     .foregroundStyle(Color.accentColor)
             }
             .buttonStyle(.plain)
@@ -1295,7 +1426,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             Button(action: {
                 executeFindOnPage(findText, backwards: false)
             }) {
-                Image("chevron.right", bundle: .module)
+                Image("arrow_forward_ios", bundle: .module)
                     .foregroundStyle(Color.accentColor)
             }
             .buttonStyle(.plain)
@@ -1485,7 +1616,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             .accessibilityIdentifier(isCurrentPageFavorited ? "menu.removeFavorite" : "menu.addFavorite")
             .disabled(currentURL == nil)
 
-            ShareLink(item: currentState?.pageURL ?? fallbackURL) {
+            ShareLink(item: currentState?.url?.absoluteString ?? fallbackURL) {
                 Label {
                     Text("Share", bundle: .module, comment: "share button label")
                 } icon: {
@@ -1502,7 +1633,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 }
             }
             .accessibilityIdentifier("menu.copyURL")
-            .disabled(currentState?.pageURL == nil)
+            .disabled(currentState?.url == nil)
 
             Button(action: pasteAndGoAction) {
                 Label {
@@ -1521,7 +1652,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 }
             }
             .accessibilityIdentifier("menu.openInExternalBrowser")
-            .disabled(currentState?.pageURL == nil)
+            .disabled(currentState?.url == nil)
 
             // Translate Page — temporarily disabled while we
             // consider the right customization (provider choice,
@@ -1537,7 +1668,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 }
             }
             .accessibilityIdentifier("menu.translatePage")
-            .disabled(currentState?.pageURL == nil)
+            .disabled(currentState?.url == nil)
             */
 
             Divider()
@@ -1603,7 +1734,11 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             Label {
                 Text("Menu", bundle: .module, comment: "hamburger menu label")
             } icon: {
-                Image("ellipsis", bundle: .module)
+                // `pending` is the Material Symbol for "horizontal
+                // dots inside a circle" — the user explicitly asked
+                // for a circle-with-dots affordance for More rather
+                // than the bare ellipsis dots.
+                Image("pending", bundle: .module)
                     .font(.system(size: toolbarIconSize))
             }
         }
@@ -1787,7 +1922,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 // and mirrored fields drop out), but `BrowserView`'s
                 // `updatePageURL` writes the URL back to the store on
                 // every navigation, so the store always has it.
-                var url = tab.state.pageURL ?? ""
+                var url = tab.state.url?.absoluteString ?? ""
                 if url.isEmpty {
                     url = tab.savedURL
                 }
@@ -1874,7 +2009,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         // every comparison.
         var domainByID: [PageInfo.ID: String] = [:]
         for tab in tabs {
-            var url = tab.state.pageURL ?? ""
+            var url = tab.state.url?.absoluteString ?? ""
             if url.isEmpty {
                 url = tab.savedURL
             }
@@ -2042,8 +2177,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             // tie everything to the same swap point: capture state
             // now, then let the snapshot Task pick up the pixels
             // before the view is torn down.
-            if let pageURL = outgoing.state.pageURL, !pageURL.isEmpty {
-                outgoing.savedURL = pageURL
+            if let pageURL = outgoing.state.url {
+                outgoing.savedURL = pageURL.absoluteString
             }
             if let pageTitle = outgoing.state.pageTitle, !pageTitle.isEmpty {
                 outgoing.savedTitle = pageTitle
@@ -2056,7 +2191,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         // If requesting a blank tab, reuse an existing blank tab instead of creating another
         if url == nil {
             for tab in tabs {
-                if tab.state.url == nil && (tab.state.pageURL == nil || tab.state.pageURL == "about:blank") {
+                if tab.state.url == nil || tab.state.url?.absoluteString == "about:blank" {
                     // Reused blank tab: arm its focus signal so
                     // `BrowserView` will pop the keyboard the moment it
                     // becomes visible — same UX as a freshly-created
@@ -2195,7 +2330,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     }
 
     func copyURLAction() {
-        guard let pageURL = currentState?.pageURL, !pageURL.isEmpty else { return }
+        guard let url = currentState?.url else { return }
+        let pageURL = url.absoluteString
         logger.info("copyURLAction: \(pageURL)")
         hapticFeedback()
         #if SKIP
@@ -2220,8 +2356,9 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     /// modern user agent without account requirements. Falls back
     /// gracefully (no-op) when there's no live page URL.
     func translatePageAction() {
-        guard let pageURL = currentState?.pageURL, !pageURL.isEmpty,
-              let encoded = pageURL.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryAllowed) else { return }
+        guard let url = currentState?.url,
+              let encoded = url.absoluteString.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryAllowed) else { return }
+        let pageURL = url.absoluteString
         logger.info("translatePageAction: \(pageURL)")
         hapticFeedback()
         // `op=websites` is the modern Google Translate URL contract
@@ -2232,9 +2369,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     }
 
     func openInExternalBrowserAction() {
-        guard let pageURL = currentState?.pageURL,
-              !pageURL.isEmpty,
-              let url = URL(string: pageURL) else { return }
+        guard let url = currentState?.url else { return }
+        let pageURL = url.absoluteString
         logger.info("openInExternalBrowserAction: \(pageURL)")
         hapticFeedback()
         #if SKIP

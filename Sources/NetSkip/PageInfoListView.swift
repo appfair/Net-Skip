@@ -210,17 +210,24 @@ struct PageInfoListView<ToolbarItems : ToolbarContent> : View {
             dismiss()
             onSelect(item)
         }, label: {
-            VStack(alignment: .leading) {
-                itemTitle(item: item)
-                    .font(.body)
-                    .lineLimit(1)
-                Text(item.url ?? "")
-                    .font(.caption)
-                    .foregroundStyle(Color.gray)
-                    .lineLimit(1)
-                    #if !SKIP
-                    .truncationMode(.middle)
-                    #endif
+            HStack(spacing: 12) {
+                // Favicon for the page's domain on the leading edge,
+                // matching the URL bar's identity treatment. Falls
+                // back to the captive_portal placeholder while the
+                // network fetch resolves.
+                FaviconView(urlString: item.url, size: 20.0, cornerRadius: 4.0)
+                VStack(alignment: .leading) {
+                    itemTitle(item: item)
+                        .font(.body)
+                        .lineLimit(1)
+                    Text(item.url ?? "")
+                        .font(.caption)
+                        .foregroundStyle(Color.gray)
+                        .lineLimit(1)
+                        #if !SKIP
+                        .truncationMode(.middle)
+                        #endif
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             #if !SKIP

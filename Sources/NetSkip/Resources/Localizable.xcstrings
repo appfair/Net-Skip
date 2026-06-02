@@ -4,80 +4,39 @@
     "" : {},
     "%lld" : {},
     "%lld Tabs" : {
-      "comment" : "tabs title showing number of open tabs",
+      "comment" : "tabs sheet navigation title when more than one tab is open; argument is the count. Singular case is the separate '1 Tab' entry.",
       "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "‏%lld علامة تبويب"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%lld Tabs"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%lld pestañas"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%lld onglets"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%lld टैब"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%lld Tab"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%lld schede"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%lld個のタブ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "탭 %lld개"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%lld abas"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Вкладок: %lld"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%lld 个标签页"
-          }
-        }
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "‏%lld علامة تبويب" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "%lld Tabs" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld Tabs" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "%lld pestañas" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%lld onglets" } },
+        "hi" : { "stringUnit" : { "state" : "translated", "value" : "%lld टैब" } },
+        "id" : { "stringUnit" : { "state" : "translated", "value" : "%lld Tab" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "%lld schede" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "%lld個のタブ" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "탭 %lld개" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "%lld abas" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Вкладок: %lld" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%lld 个标签页" } }
+      }
+    },
+    "1 Tab" : {
+      "comment" : "tabs sheet navigation title when exactly one tab is open. Plural case is the separate '%lld Tabs' entry.",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "علامة تبويب واحدة" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "1 Tab" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "1 Tab" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "1 pestaña" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "1 onglet" } },
+        "hi" : { "stringUnit" : { "state" : "translated", "value" : "1 टैब" } },
+        "id" : { "stringUnit" : { "state" : "translated", "value" : "1 Tab" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "1 scheda" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "1個のタブ" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "탭 1개" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "1 aba" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "1 вкладка" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "1 个标签页" } }
       }
     },
     "About %@ %@" : {
