@@ -13,12 +13,36 @@ import NetSkipModel
 
 extension BrowserTabView {
     func restoreActiveTabs() {
+        // Guard against re-entry. The `browserTabView()` view's
+        // `.onAppear` fires again whenever the parent body's
+        // structure changes — switching `bottomOverlay` between
+        // `findBar` / `pageZoom` / `nil` recomposes the bottom slot,
+        // which on Android (Compose's LaunchedEffect-style semantics)
+        // re-runs `onAppear` on the sibling `TabView`. Without this
+        // guard, the second call re-appends the already-restored
+        // tabs, two view-models in `tabs` end up sharing the same
+        // `id`, and Compose's `LazyList` crashes with `Key "1" was
+        // already used. If you are using LazyColumn/Row please make
+        // sure you provide a unique key for each item.`
+        if !self.tabs.isEmpty { return }
+
         let activeTabs = trying { try store.loadItems(type: PageInfo.PageType.active, ids: []) }
 
         var hasBlankTab = false
         var blankTabIdsToRemove: [PageInfo.ID] = []
+        var seenIDs: Set<PageInfo.ID> = []
 
         for activeTab in activeTabs ?? [] {
+            // Defensive dedupe by id — a corrupted store with two rows
+            // sharing an id would otherwise produce two view-models with
+            // the same `BrowserViewModel.id`, which the `ForEach($tabs)`
+            // backing the Compose Pager rejects with `Key "N" was
+            // already used`.
+            if !seenIDs.insert(activeTab.id).inserted {
+                logger.warning("restoreActiveTabs: skipping duplicate id \(activeTab.id) from store")
+                continue
+            }
+
             let isBlank = activeTab.url == nil || activeTab.url == "" || activeTab.url == "about:blank"
 
             // Only keep one blank tab; remove duplicates from the database.

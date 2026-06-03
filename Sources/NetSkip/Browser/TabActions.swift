@@ -62,6 +62,19 @@ extension BrowserTabView {
         if url == nil {
             vm.shouldFocusURLBar = true
         }
+        // Defensive guard against duplicate IDs. The persistent store's
+        // `saveItems` should always hand us a fresh row, but if it
+        // silently returns the same id twice (db error, race), the
+        // `ForEach($tabs)` driving the TabView's Compose Pager crashes
+        // with `Key "N" was already used`. Focus the duplicate instead
+        // of appending a second copy.
+        if let existing = self.tabs.first(where: { $0.id == vm.id }) {
+            logger.warning("newTabAction: store returned an in-use id \(vm.id); focusing existing tab instead of appending duplicate")
+            existing.shouldFocusURLBar = vm.shouldFocusURLBar
+            self.selectedTab = existing.id
+            logTabs()
+            return
+        }
         self.tabs.append(vm)
         if !inBackground || url == nil {
             self.selectedTab = vm.id
