@@ -10,18 +10,18 @@ public struct ContentView: View {
     /// Shared Android blocker that reads category toggles and custom patterns
     /// from `UserDefaults` on every request, so settings changes take effect
     /// on the next resource load.
-    static let adBlockProvider = NetSkipAdBlockProvider()
+    static let adBlockProvider = AdBlockProvider()
 
     let config: WebEngineConfiguration = {
         return WebEngineConfiguration(
             javaScriptEnabled: true,
-            contentBlockers: netSkipMakeContentBlockerConfiguration(provider: ContentView.adBlockProvider)
+            contentBlockers: makeContentBlockerConfiguration(provider: ContentView.adBlockProvider)
         )
     }()
     #endif
-    let store = try! NetSkipWebBrowserStore(url: URL.documentsDirectory.appendingPathComponent("netskip.sqlite"))
+    let store = try! SQLBrowserStore(url: URL.documentsDirectory.appendingPathComponent("netskip.sqlite"))
 
-    @State private var settings = NetSkipSettings()
+    @State private var settings = BrowserSettings()
 
     public init() {
     }
@@ -31,7 +31,7 @@ public struct ContentView: View {
         BrowserTabView(configuration: config, store: store)
             .environment(settings)
         #else
-        Text("Net Skip requires iOS")
+        Text("Browser requires iOS")
             .environment(settings)
         #endif
     }

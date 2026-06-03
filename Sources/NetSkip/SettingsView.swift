@@ -13,7 +13,7 @@ struct SettingsView : View {
     var store: WebBrowserStore?
     var onClearCache: (() -> Void)? = nil
 
-    @Environment(NetSkipSettings.self) var settings
+    @Environment(BrowserSettings.self) var settings
 
     @State var confirmClearHistory: Bool = false
     @State var confirmClearFavorites: Bool = false
@@ -26,7 +26,7 @@ struct SettingsView : View {
         // `@Bindable` projects two-way bindings off the @Observable settings
         // instance so individual Toggle/Picker/TextField controls can write
         // back through `$settings.x`. Must be declared and used inline in
-        // `body`; passing a plain `NetSkipSettings` parameter to a helper
+        // `body`; passing a plain `BrowserSettings` parameter to a helper
         // would lose the projected-value subscript.
         @Bindable var settings = settings
         return AppFairSettings(bundle: .module) {
@@ -180,7 +180,7 @@ struct SettingsView : View {
                 .accessibilityIdentifier("toggle.blockCookieBanners")
 
                 NavigationLink {
-                    NetSkipDomainListEditor(
+                    DomainListEditor(
                         title: Text("Allowed Sites", bundle: .module, comment: "title for the whitelisted sites editor"),
                         descriptionText: Text("Sites listed here bypass content blocking. Use bare domains like example.com or wildcards like *.example.com.", bundle: .module, comment: "description for whitelisted sites editor"),
                         prompt: Text("example.com", bundle: .module, comment: "placeholder for entering a whitelisted domain"),
@@ -197,7 +197,7 @@ struct SettingsView : View {
                 .accessibilityIdentifier("link.allowedSites")
 
                 NavigationLink {
-                    NetSkipDomainListEditor(
+                    DomainListEditor(
                         title: Text("Custom Block Rules", bundle: .module, comment: "title for the custom blocked patterns editor"),
                         descriptionText: Text("Block any request whose URL contains one of these substrings. Example: tracker.example.com or /analytics/.", bundle: .module, comment: "description for custom blocked patterns editor"),
                         prompt: Text("tracker.example.com", bundle: .module, comment: "placeholder for entering a custom blocked pattern"),
@@ -324,7 +324,9 @@ struct SettingsView : View {
                         //WebView(url: aboutPage)
                         #if !os(macOS)
                         VStack(spacing: 0.0) {
-                            TitleView()
+                            Text(verbatim: appName)
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundStyle(.primary)
                             let aboutHTML = ((try? String(contentsOf: aboutPage)) ?? "error loading local content")
                                 .replacingOccurrences(of: "APP_VERSION", with: appVersion)
                             WebView(html: aboutHTML)

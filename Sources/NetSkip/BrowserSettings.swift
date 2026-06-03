@@ -2,7 +2,7 @@
 import Foundation
 import SwiftUI
 
-/// Centralised user-preferences store for Net-Skip.
+/// Centralised user-preferences store for the browser.
 ///
 /// Loads each value from `UserDefaults` once on init and writes it back via
 /// the property's `didSet` whenever it changes. Lives as a single
@@ -15,7 +15,7 @@ import SwiftUI
 /// existing on-disk preferences survive the migration.
 @MainActor
 @Observable
-public final class NetSkipSettings {
+public final class BrowserSettings {
     private let defaults: UserDefaults
 
     // MARK: - Appearance

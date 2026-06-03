@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Self-contained download manager + SwiftUI list view for Net-Skip.
+// Self-contained download manager + SwiftUI list view.
 //
 // This file is intentionally written so the types here could be lifted out
 // into a future `skip-download` framework without depending on anything from
-// Net-Skip's other modules. The only external coupling is:
+// the host browser's other modules. The only external coupling is:
 //
 //   * `SkipWeb.WebDownloadRequest` — the request descriptor produced by the
 //     embedded `WebView` when WebKit / Android WebView decides a navigation
@@ -40,13 +40,13 @@ import androidx.core.content.FileProvider
 /// enqueued. UI code (e.g. a tab view) can use this to auto-present the
 /// downloads sheet without having to be passed any direct binding.
 public extension Notification.Name {
-    static let netSkipDownloadEnqueued = Notification.Name("netSkipDownloadEnqueued")
+    static let downloadEnqueued = Notification.Name("downloadEnqueued")
 }
 
 // MARK: - Model
 
 /// The lifecycle of a single download.
-public enum NetSkipDownloadState: Equatable, Sendable {
+public enum DownloadState: Equatable, Sendable {
     case pending
     case downloading
     case completed
@@ -58,7 +58,7 @@ public enum NetSkipDownloadState: Equatable, Sendable {
 /// rebuild as `bytesWritten` / `state` change.
 @MainActor
 @Observable
-public final class NetSkipDownloadItem: Identifiable {
+public final class DownloadItem: Identifiable {
     public let id: UUID = UUID()
     public let url: URL?
     public let filename: String
@@ -66,7 +66,7 @@ public final class NetSkipDownloadItem: Identifiable {
     public let startedAt: Date = Date()
 
     public var localURL: URL?
-    public var state: NetSkipDownloadState = .pending
+    public var state: DownloadState = .pending
     public var bytesWritten: Int64 = 0
     public var totalBytes: Int64 = 0
     public var lastProgressAt: Date = Date()
@@ -123,10 +123,10 @@ public final class NetSkipDownloadItem: Identifiable {
 /// `Observable` so the menu badge / list view rebuild when downloads appear.
 @MainActor
 @Observable
-public final class NetSkipDownloadManager {
-    public static let shared = NetSkipDownloadManager()
+public final class DownloadManager {
+    public static let shared = DownloadManager()
 
-    public private(set) var downloads: [NetSkipDownloadItem] = []
+    public private(set) var downloads: [DownloadItem] = []
     public let downloadsDirectory: URL
 
     public init(downloadsDirectory: URL? = nil) {
@@ -163,7 +163,7 @@ public final class NetSkipDownloadManager {
 
     /// Begin a new download for the WebKit / WebView request.
     @discardableResult
-    public func enqueue(_ request: WebDownloadRequest) -> NetSkipDownloadItem {
+    public func enqueue(_ request: WebDownloadRequest) -> DownloadItem {
         let filename = Self.sanitizeFilename(
             request.suggestedFilename
                 ?? request.url?.lastPathComponent
@@ -172,19 +172,19 @@ public final class NetSkipDownloadManager {
             url: request.url,
             contentDisposition: request.contentDisposition
         )
-        let item = NetSkipDownloadItem(
+        let item = DownloadItem(
             url: request.url,
             filename: filename,
             mimeType: request.mimeType,
             expectedSize: request.contentLength
         )
         downloads.insert(item, at: 0)
-        NotificationCenter.default.post(name: .netSkipDownloadEnqueued, object: item)
+        NotificationCenter.default.post(name: .downloadEnqueued, object: item)
         startTask(for: item)
         return item
     }
 
-    public func cancel(_ item: NetSkipDownloadItem) {
+    public func cancel(_ item: DownloadItem) {
         item.sessionTask?.cancel()
         if case .pending = item.state {
             item.state = .cancelled
@@ -198,14 +198,14 @@ public final class NetSkipDownloadManager {
     /// downloads crawl on Android. The delegate path receives bytes in
     /// `didReceive data:` chunks straight from OkHttp on Android and from
     /// URLSession's native loader on iOS.
-    private func startTask(for item: NetSkipDownloadItem) {
+    private func startTask(for item: DownloadItem) {
         guard let url = item.url else {
             item.state = .failed("Missing URL")
             return
         }
         let destination = uniqueDestination(for: item.filename)
         item.localURL = destination
-        let delegate = NetSkipDownloadTaskDelegate(item: item, destinationPath: destination.path)
+        let delegate = DownloadTaskDelegate(item: item, destinationPath: destination.path)
         let config = URLSessionConfiguration.ephemeral
         let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
         delegate.session = session
@@ -217,7 +217,7 @@ public final class NetSkipDownloadManager {
 
     /// Removes a finished/cancelled item from the visible list.
     /// In-flight downloads are cancelled first.
-    public func remove(_ item: NetSkipDownloadItem) {
+    public func remove(_ item: DownloadItem) {
         cancel(item)
         downloads.removeAll(where: { $0.id == item.id })
     }
@@ -231,13 +231,13 @@ public final class NetSkipDownloadManager {
     /// Receives chunked body data from the URLSession data task and writes it
     /// to disk. Lives one-per-download — we don't share a session across
     /// downloads so each task's `invalidateAndCancel` cleans up cleanly.
-    final class NetSkipDownloadTaskDelegate: NSObject, URLSessionDataDelegate {
-        let item: NetSkipDownloadItem
+    final class DownloadTaskDelegate: NSObject, URLSessionDataDelegate {
+        let item: DownloadItem
         let destinationPath: String
         var session: URLSession?
-        private var writer: NetSkipDownloadWriter?
+        private var writer: DownloadWriter?
 
-        init(item: NetSkipDownloadItem, destinationPath: String) {
+        init(item: DownloadItem, destinationPath: String) {
             self.item = item
             self.destinationPath = destinationPath
         }
@@ -257,7 +257,7 @@ public final class NetSkipDownloadManager {
                 }
             }
             do {
-                writer = try NetSkipDownloadWriter(path: destinationPath)
+                writer = try DownloadWriter(path: destinationPath)
                 completionHandler(.allow)
             } catch {
                 completionHandler(.cancel)
@@ -321,7 +321,7 @@ public final class NetSkipDownloadManager {
 
     /// Small platform abstraction: iOS uses `FileHandle`, Skip writes through a
     /// `BufferedOutputStream` so the platform layer can flush in its own way.
-    final class NetSkipDownloadWriter {
+    final class DownloadWriter {
         #if SKIP
         private let out: java.io.BufferedOutputStream
         init(path: String) throws {
@@ -516,7 +516,7 @@ public final class NetSkipDownloadManager {
 
 /// Opens the downloaded file in the system's default handler.
 @MainActor
-func netSkipOpenDownloadedFile(_ item: NetSkipDownloadItem) {
+func openDownloadedFile(_ item: DownloadItem) {
     guard let local = item.localURL else { return }
     #if SKIP
     let ctx: Context = ProcessInfo.processInfo.androidContext
@@ -571,7 +571,7 @@ func netSkipOpenDownloadedFile(_ item: NetSkipDownloadItem) {
 
 // MARK: - Number formatting helpers
 
-func netSkipFormatBytes(_ bytes: Int64) -> String {
+func formatBytes(_ bytes: Int64) -> String {
     if bytes <= 0 { return "0 B" }
     let units = ["B", "KB", "MB", "GB", "TB"]
     var value = Double(bytes)
@@ -586,7 +586,7 @@ func netSkipFormatBytes(_ bytes: Int64) -> String {
     return String(format: "%.1f %@", value, units[idx])
 }
 
-func netSkipFormatRemaining(_ seconds: Double) -> String {
+func formatRemaining(_ seconds: Double) -> String {
     if !seconds.isFinite || seconds < 0 { return "—" }
     let total = Int(seconds.rounded())
     if total < 60 {
@@ -604,11 +604,11 @@ func netSkipFormatRemaining(_ seconds: Double) -> String {
 
 /// The Downloads sheet — lists in-flight and completed downloads.
 @MainActor
-public struct NetSkipDownloadsListView: View {
+public struct DownloadsListView: View {
     @Environment(\.dismiss) private var dismiss
-    private let manager: NetSkipDownloadManager
+    private let manager: DownloadManager
 
-    public init(manager: NetSkipDownloadManager = .shared) {
+    public init(manager: DownloadManager = .shared) {
         self.manager = manager
     }
 
@@ -677,7 +677,7 @@ public struct NetSkipDownloadsListView: View {
         } else {
             List {
                 ForEach(manager.downloads) { item in
-                    NetSkipDownloadRow(item: item, manager: manager)
+                    DownloadRow(item: item, manager: manager)
                         .accessibilityIdentifier("downloads.row.\(item.filename)")
                 }
             }
@@ -687,9 +687,9 @@ public struct NetSkipDownloadsListView: View {
 }
 
 @MainActor
-struct NetSkipDownloadRow: View {
-    let item: NetSkipDownloadItem
-    let manager: NetSkipDownloadManager
+struct DownloadRow: View {
+    let item: DownloadItem
+    let manager: DownloadManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -742,7 +742,7 @@ struct NetSkipDownloadRow: View {
         case .completed:
             HStack(spacing: 8) {
                 Button {
-                    netSkipOpenDownloadedFile(item)
+                    openDownloadedFile(item)
                 } label: {
                     Text("Open", bundle: .module, comment: "open downloaded file button")
                         .bold()
@@ -774,17 +774,17 @@ struct NetSkipDownloadRow: View {
         case .pending:
             return "Waiting…"
         case .downloading:
-            let written = netSkipFormatBytes(item.bytesWritten)
+            let written = formatBytes(item.bytesWritten)
             if item.totalBytes > 0 {
-                let total = netSkipFormatBytes(item.totalBytes)
+                let total = formatBytes(item.totalBytes)
                 if let remaining = item.estimatedRemainingSeconds {
-                    return "\(written) of \(total) · \(netSkipFormatRemaining(remaining)) left"
+                    return "\(written) of \(total) · \(formatRemaining(remaining)) left"
                 }
                 return "\(written) of \(total)"
             }
             return written
         case .completed:
-            return netSkipFormatBytes(item.totalBytes > 0 ? item.totalBytes : item.bytesWritten)
+            return formatBytes(item.totalBytes > 0 ? item.totalBytes : item.bytesWritten)
         case .cancelled:
             return "Cancelled"
         case .failed:

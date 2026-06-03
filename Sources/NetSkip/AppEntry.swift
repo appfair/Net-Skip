@@ -3,7 +3,7 @@ import Foundation
 import OSLog
 import SwiftUI
 
-let logger: Logger = Logger(subsystem: "org.appfair.Net-Skip", category: "NetSkip")
+let logger: Logger = Logger(subsystem: "org.appfair.Net-Skip", category: "Browser")
 
 /// The Android SDK number we are running against, or `nil` if not running on Android
 let androidSDK = ProcessInfo.processInfo.environment["android.os.Build.VERSION.SDK_INT"].flatMap({ Int($0) })
@@ -26,13 +26,14 @@ public struct RootView : View {
 }
 
 #if !SKIP
-public protocol NetSkipApp : App {
+public protocol BrowserApp : App {
 }
 
-/// The entry point to the NetSkip app.
-/// The concrete implementation is in the NetSkipApp module.
+/// The entry point to the browser app — the concrete implementation
+/// in the host package conforms its `@main` `App` to `BrowserApp`
+/// and inherits this default body.
 @available(iOS 17, macOS 14.0, *)
-public extension NetSkipApp {
+public extension BrowserApp {
     var body: some Scene {
         WindowGroup {
             RootView()

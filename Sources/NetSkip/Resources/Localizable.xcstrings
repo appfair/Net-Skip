@@ -415,7 +415,7 @@
       "comment" : "link long-press menu: bookmark the URL"
     },
     "Add to Favorites" : {
-      "comment" : "add to favorites button label",
+      "comment" : "favicon menu: bookmark this page",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -3190,7 +3190,7 @@
       "comment" : "link long-press menu: copy the URL to the clipboard"
     },
     "Copy URL" : {
-      "comment" : "context-menu item that copies a single tab's URL to the clipboard from the tab overview\nmenu label for copying the current page URL to the clipboard",
+      "comment" : "context-menu item that copies a single tab's URL to the clipboard from the tab overview\nfavicon menu: copy the current page URL to the clipboard\nmenu label for copying the current page URL to the clipboard",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -5042,7 +5042,7 @@
       }
     },
     "Find on Page" : {
-      "comment" : "find on page button label",
+      "comment" : "favicon menu: open the in-page find UI",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -6507,6 +6507,7 @@
     },
     "Net Skip" : {
       "comment" : "title screen headline",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -7592,7 +7593,7 @@
       }
     },
     "Open in External Browser" : {
-      "comment" : "menu label that hands the current page URL to the system's default browser — the escape hatch for sites that don't render correctly in this WebView",
+      "comment" : "favicon menu: hand the current page URL to the system's default browser",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -7900,7 +7901,7 @@
       }
     },
     "Page Zoom" : {
-      "comment" : "page zoom button label",
+      "comment" : "favicon menu: adjust text zoom for the current page",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -8449,6 +8450,7 @@
     },
     "Reload" : {
       "comment" : "reload button label",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -8756,7 +8758,7 @@
       }
     },
     "Remove from Favorites" : {
-      "comment" : "menu label when the current page is already saved as a favorite — tapping removes it",
+      "comment" : "favicon menu: remove this page from favorites",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -9680,7 +9682,7 @@
       }
     },
     "Share" : {
-      "comment" : "share button label\ntoolbar share button label",
+      "comment" : "favicon menu: share the current page URL via the system share sheet\ntoolbar share button label",
       "localizations" : {
         "ar" : {
           "stringUnit" : {

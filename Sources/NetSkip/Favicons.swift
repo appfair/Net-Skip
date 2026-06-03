@@ -25,8 +25,8 @@ private let faviconLogger = Logger(subsystem: "org.appfair.app.netskip", categor
 ///
 /// No third-party service is in the loop — every byte is fetched
 /// from the page's own host, matching the user's privacy posture.
-@MainActor public final class NetSkipFaviconCache {
-    public static let shared = NetSkipFaviconCache()
+@MainActor public final class FaviconCache {
+    public static let shared = FaviconCache()
 
     /// In-memory map: domain → PNG bytes. Bytes (not images) so the
     /// store is platform-agnostic; the view decodes lazily.
@@ -359,7 +359,7 @@ private extension URL {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: size, height: size)
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            } else if let domain = NetSkipFaviconCache.domain(from: urlString) {
+            } else if let domain = FaviconCache.domain(from: urlString) {
                 // Per-domain letter avatar — same hash → same color
                 // every time, so a site keeps its identity colour
                 // across URL bar / history / bookmarks / tab cards
@@ -384,12 +384,12 @@ private extension URL {
             }
         }
         .task(id: urlString ?? "") {
-            if let cached = NetSkipFaviconCache.shared.cachedData(for: urlString) {
+            if let cached = FaviconCache.shared.cachedData(for: urlString) {
                 self.loadedData = cached
                 return
             }
             self.loadedData = nil
-            let fetched = await NetSkipFaviconCache.shared.data(for: urlString)
+            let fetched = await FaviconCache.shared.data(for: urlString)
             if Task.isCancelled { return }
             self.loadedData = fetched
         }

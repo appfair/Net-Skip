@@ -10,7 +10,7 @@ import SkipWeb
 /// UserDefaults keys for content blocking settings.
 ///
 /// Keep in sync with the `@AppStorage` keys used in `BrowserTabView` and `SettingsView`.
-enum NetSkipContentBlockingKey {
+enum ContentBlockingKey {
     static let blockAds = "blockAds"
     static let blockTrackers = "blockTrackers"
     static let blockCookieBanners = "blockCookieBanners"
@@ -21,7 +21,7 @@ enum NetSkipContentBlockingKey {
 }
 
 /// Splits a newline-separated settings value into a trimmed, non-empty list.
-func netSkipParseLineList(_ raw: String) -> [String] {
+func parseLineList(_ raw: String) -> [String] {
     raw
         .split(separator: "\n", omittingEmptySubsequences: true)
         .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -29,7 +29,7 @@ func netSkipParseLineList(_ raw: String) -> [String] {
 }
 
 /// Default category state: ON when the corresponding key has never been set.
-func netSkipContentBlockingDefault(_ key: String) -> Bool {
+func contentBlockingDefault(_ key: String) -> Bool {
     let defaults = UserDefaults.standard
     if defaults.object(forKey: key) == nil {
         return true
@@ -37,14 +37,14 @@ func netSkipContentBlockingDefault(_ key: String) -> Bool {
     return defaults.bool(forKey: key)
 }
 
-/// Categorized Android content-blocking provider for Net-Skip.
+/// Categorized Android content-blocking provider.
 ///
 /// The provider reads category toggles and custom patterns from `UserDefaults`
 /// on each request, so changes made via the settings UI take effect on the next
 /// resource load without recreating the engine. Domain whitelisting is handled
 /// by SkipWeb via `WebContentBlockerConfiguration.whitelistedDomains` rather
 /// than here, so this provider only deals with category-level pattern matching.
-final class NetSkipAdBlockProvider: AndroidContentBlockingProvider {
+final class AdBlockProvider: AndroidContentBlockingProvider {
     /// Ad-network and ad-serving domain substrings.
     static let adPatterns: [String] = [
         "doubleclick.net",
@@ -96,7 +96,45 @@ final class NetSkipAdBlockProvider: AndroidContentBlockingProvider {
         "termly.io",
     ]
 
+    /// Substring patterns extracted from the bundled WebKit content-rule
+    /// list (`block-ads.json`). The iOS WebView compiles the JSON
+    /// directly; on Android we extract the literal segments from each
+    /// rule's `url-filter` regex so the on-device check is a quick set
+    /// of `String.contains` lookups rather than a full regex engine.
+    ///
+    /// Loaded lazily on a background queue the first time the provider
+    /// is consulted — a synchronous parse of the bundled JSON (5800+
+    /// rules) blocks the Android main thread long enough to trip the
+    /// startup activity-launch watchdog, so the first few requests
+    /// fall back to the hard-coded `adPatterns` list above while the
+    /// background task warms the cache.
+    nonisolated(unsafe) private static var extractedAdSubstrings: [String] = []
+    nonisolated(unsafe) private static var extractedCookieBannerSubstrings: [String] = []
+    nonisolated(unsafe) private static var didStartExtractionLoad = false
+
     var persistentCosmeticRules: [AndroidCosmeticRule] { [] }
+
+    /// Kick off the background extraction once. Reads here are
+    /// best-effort — a duplicated extraction is harmless because the
+    /// final assignment is just a single Array reference swap, which
+    /// is atomic for `String` arrays via copy-on-write. We don't take
+    /// a lock so this stays callable from the WebView's worker thread
+    /// without dragging the Swift-6 actor isolation requirements onto
+    /// every call site.
+    private static func warmExtractedPatternsIfNeeded() {
+        if didStartExtractionLoad { return }
+        didStartExtractionLoad = true
+        Task.detached(priority: .utility) {
+            let ads = AdBlockProvider.loadExtractedPatterns(resource: IOSRuleList.ads)
+            let cookies = AdBlockProvider.loadExtractedPatterns(resource: IOSRuleList.cookieBanners)
+            extractedAdSubstrings = ads
+            extractedCookieBannerSubstrings = cookies
+        }
+    }
+
+    private static func snapshotExtractedPatterns() -> (ads: [String], cookies: [String]) {
+        return (extractedAdSubstrings, extractedCookieBannerSubstrings)
+    }
 
     func requestDecision(for request: AndroidBlockableRequest) -> AndroidRequestBlockDecision {
         // Don't block main frame navigations so users can always reach the page.
@@ -104,29 +142,40 @@ final class NetSkipAdBlockProvider: AndroidContentBlockingProvider {
             return .allow
         }
 
+        // First request kicks off the background JSON parse; subsequent
+        // requests see a non-empty `extractedAd/CookieBannerSubstrings`
+        // and benefit from the wider rule set.
+        Self.warmExtractedPatternsIfNeeded()
+        let extracted = Self.snapshotExtractedPatterns()
         let urlString = request.url.absoluteString
 
-        if netSkipContentBlockingDefault(NetSkipContentBlockingKey.blockAds) {
+        if contentBlockingDefault(ContentBlockingKey.blockAds) {
             for pattern in Self.adPatterns where urlString.contains(pattern) {
+                return .block
+            }
+            for pattern in extracted.ads where urlString.contains(pattern) {
                 return .block
             }
         }
 
-        if netSkipContentBlockingDefault(NetSkipContentBlockingKey.blockTrackers) {
+        if contentBlockingDefault(ContentBlockingKey.blockTrackers) {
             for pattern in Self.trackerPatterns where urlString.contains(pattern) {
                 return .block
             }
         }
 
-        if netSkipContentBlockingDefault(NetSkipContentBlockingKey.blockCookieBanners) {
+        if contentBlockingDefault(ContentBlockingKey.blockCookieBanners) {
             for pattern in Self.cookieBannerPatterns where urlString.contains(pattern) {
+                return .block
+            }
+            for pattern in extracted.cookies where urlString.contains(pattern) {
                 return .block
             }
         }
 
-        let customRaw = UserDefaults.standard.string(forKey: NetSkipContentBlockingKey.customBlockedPatterns) ?? ""
+        let customRaw = UserDefaults.standard.string(forKey: ContentBlockingKey.customBlockedPatterns) ?? ""
         if !customRaw.isEmpty {
-            for pattern in netSkipParseLineList(customRaw) where urlString.contains(pattern) {
+            for pattern in parseLineList(customRaw) where urlString.contains(pattern) {
                 return .block
             }
         }
@@ -137,25 +186,103 @@ final class NetSkipAdBlockProvider: AndroidContentBlockingProvider {
     func navigationCosmeticRules(for page: AndroidPageContext) -> [AndroidCosmeticRule] {
         return []
     }
+
+    /// Read a WebKit content-rule JSON file and extract the substring
+    /// portion of every `block` rule whose `url-filter` is a simple
+    /// regex (no `* + ? [ ] ( ) |`, after stripping the standard
+    /// `^https?://` anchor and unescaping `\.` / `\/` / `\-`). The
+    /// remaining metacharacter-bearing rules are skipped — Android
+    /// users get the union of these extracted substrings plus the
+    /// hard-coded supplementary lists above.
+    private static func loadExtractedPatterns(resource: String) -> [String] {
+        guard let url = Bundle.module.url(forResource: resource, withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let root = try? JSONSerialization.jsonObject(with: data),
+              let rules = root as? [[String: Any]] else {
+            return []
+        }
+        var seen: Set<String> = []
+        var patterns: [String] = []
+        for rule in rules {
+            guard let action = rule["action"] as? [String: Any],
+                  (action["type"] as? String) == "block" else { continue }
+            guard let trigger = rule["trigger"] as? [String: Any] else { continue }
+            // Skip conditional rules — load-type / domain conditions
+            // need an evaluator we don't ship on Android.
+            if trigger["unless-domain"] != nil { continue }
+            if trigger["if-domain"] != nil { continue }
+            if trigger["load-type"] != nil { continue }
+            guard let urlFilter = trigger["url-filter"] as? String else { continue }
+            guard let extracted = extractLiteralSubstring(from: urlFilter), extracted.count >= 4 else { continue }
+            if seen.insert(extracted).inserted {
+                patterns.append(extracted)
+            }
+        }
+        return patterns
+    }
+
+    /// Convert a WebKit `url-filter` regex into a plain substring when
+    /// the regex is just an anchored escaped substring. Returns nil
+    /// for anything that still contains regex metacharacters after the
+    /// standard transformations.
+    static func extractLiteralSubstring(from regex: String) -> String? {
+        var s = regex
+        // Strip the conventional anchor prefixes used in
+        // safari-content-blocker rule lists.
+        let anchorPrefixes = [
+            "^https?:\\/\\/[^\\/]*",
+            "^https?:\\/\\/",
+            "^https://",
+            "^http://",
+            "^",
+        ]
+        for prefix in anchorPrefixes where s.hasPrefix(prefix) {
+            s = String(s.dropFirst(prefix.count))
+            break
+        }
+        // Strip a trailing `$` anchor.
+        if s.hasSuffix("$") {
+            s = String(s.dropLast())
+        }
+        // Unescape the common punctuation escapes that appear in
+        // roughly 90% of the bundled rules.
+        s = s.replacingOccurrences(of: "\\.", with: ".")
+        s = s.replacingOccurrences(of: "\\/", with: "/")
+        s = s.replacingOccurrences(of: "\\-", with: "-")
+        s = s.replacingOccurrences(of: "\\_", with: "_")
+        s = s.replacingOccurrences(of: "\\?", with: "?")
+        s = s.replacingOccurrences(of: "\\=", with: "=")
+        // Any remaining regex metacharacter disqualifies the pattern.
+        // `+` is a quantifier; `*` matches anything; `[`/`(`/`|` are
+        // grouping; `\` left over means there's an escape we didn't
+        // handle. `?` and `=` are fine — they're legal URL bytes once
+        // unescaped.
+        for ch in s {
+            if "*+[](){}|^$\\".contains(ch) {
+                return nil
+            }
+        }
+        return s.isEmpty ? nil : s
+    }
 }
 
-/// Names of the iOS rule list JSON files bundled with Net-Skip, by category.
-enum NetSkipIOSRuleList {
+/// Names of the iOS rule list JSON files bundled with the app, by category.
+enum IOSRuleList {
     static let ads = "block-ads"
     static let cookieBanners = "block-cookies"
 }
 
 /// Builds the list of iOS rule list JSON paths to install based on current toggles.
-func netSkipIOSRuleListPaths() -> [String] {
+func currentIOSRuleListPaths() -> [String] {
     var paths: [String] = []
     let bundle = Bundle.module
-    if netSkipContentBlockingDefault(NetSkipContentBlockingKey.blockAds) {
-        if let path = bundle.url(forResource: NetSkipIOSRuleList.ads, withExtension: "json")?.path {
+    if contentBlockingDefault(ContentBlockingKey.blockAds) {
+        if let path = bundle.url(forResource: IOSRuleList.ads, withExtension: "json")?.path {
             paths.append(path)
         }
     }
-    if netSkipContentBlockingDefault(NetSkipContentBlockingKey.blockCookieBanners) {
-        if let path = bundle.url(forResource: NetSkipIOSRuleList.cookieBanners, withExtension: "json")?.path {
+    if contentBlockingDefault(ContentBlockingKey.blockCookieBanners) {
+        if let path = bundle.url(forResource: IOSRuleList.cookieBanners, withExtension: "json")?.path {
             paths.append(path)
         }
     }
@@ -163,11 +290,11 @@ func netSkipIOSRuleListPaths() -> [String] {
 }
 
 /// Builds a `WebContentBlockerConfiguration` from the current settings.
-func netSkipMakeContentBlockerConfiguration(provider: NetSkipAdBlockProvider) -> WebContentBlockerConfiguration {
-    let whitelistRaw = UserDefaults.standard.string(forKey: NetSkipContentBlockingKey.whitelistedDomains) ?? ""
-    let whitelisted = netSkipParseLineList(whitelistRaw)
+func makeContentBlockerConfiguration(provider: AdBlockProvider) -> WebContentBlockerConfiguration {
+    let whitelistRaw = UserDefaults.standard.string(forKey: ContentBlockingKey.whitelistedDomains) ?? ""
+    let whitelisted = parseLineList(whitelistRaw)
     return WebContentBlockerConfiguration(
-        iOSRuleListPaths: netSkipIOSRuleListPaths(),
+        iOSRuleListPaths: currentIOSRuleListPaths(),
         whitelistedDomains: whitelisted,
         androidMode: .custom(provider)
     )
@@ -175,10 +302,10 @@ func netSkipMakeContentBlockerConfiguration(provider: NetSkipAdBlockProvider) ->
 
 /// A small list editor backed by a newline-separated string.
 ///
-/// Used by the Net-Skip settings UI for both the whitelisted-sites list and the
+/// Used by the settings UI for both the whitelisted-sites list and the
 /// custom blocked-patterns list. Entries are trimmed and de-duplicated on save,
 /// and an inline TextField lets users add new entries without leaving the screen.
-struct NetSkipDomainListEditor: View {
+struct DomainListEditor: View {
     let title: Text
     let descriptionText: Text
     let prompt: Text
@@ -188,7 +315,7 @@ struct NetSkipDomainListEditor: View {
     @State private var newEntry: String = ""
 
     private var entries: [String] {
-        netSkipParseLineList(rawText)
+        parseLineList(rawText)
     }
 
     var body: some View {

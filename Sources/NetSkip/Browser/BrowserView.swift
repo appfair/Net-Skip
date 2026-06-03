@@ -22,7 +22,6 @@ import NetSkipModel
     let toggleDesktopSiteAction: () -> Void
     @Binding var viewModel: BrowserViewModel
 
-    @Binding var showSettings: Bool
     @Binding var showBottomBar: Bool
 
     @State var currentSuggestions: SearchSuggestions? = nil
@@ -33,7 +32,7 @@ import NetSkipModel
     @State var urlSelection: TextSelection? = nil
     #endif
 
-    @Environment(NetSkipSettings.self) var settings
+    @Environment(BrowserSettings.self) var settings
     @Environment(\.colorScheme) var colorScheme
 
     @FocusState var isURLBarFocused: Bool
@@ -53,7 +52,7 @@ import NetSkipModel
     /// `appindex.bin` → `appindex.json`).
     var pendingDownloadDisplayName: String {
         if let request = pendingDownload {
-            return NetSkipDownloadManager.resolvedFilename(for: request)
+            return DownloadManager.resolvedFilename(for: request)
         }
         return "file"
     }
@@ -79,7 +78,7 @@ import NetSkipModel
                             self.pendingDownload = request
                             self.showDownloadPrompt = true
                         } else {
-                            NetSkipDownloadManager.shared.enqueue(request)
+                            DownloadManager.shared.enqueue(request)
                         }
                     }
                 })
@@ -115,7 +114,7 @@ import NetSkipModel
         ) {
             Button {
                 if let request = pendingDownload {
-                    NetSkipDownloadManager.shared.enqueue(request)
+                    DownloadManager.shared.enqueue(request)
                 }
                 pendingDownload = nil
             } label: {
@@ -278,7 +277,7 @@ import NetSkipModel
             let pageURL = viewModel.state.url
             if let engine = viewModel.navigator.webEngine {
                 Task { @MainActor in
-                    await NetSkipFaviconCache.shared.discoverHighResIcon(in: engine, pageURL: pageURL)
+                    await FaviconCache.shared.discoverHighResIcon(in: engine, pageURL: pageURL)
                 }
             }
         }
@@ -977,7 +976,7 @@ import NetSkipModel
             logger.info("addPageToHistory: \(title) \(url)")
             trying {
                 // Update existing history entry if URL already exists, otherwise create new
-                if let netStore = store as? NetSkipWebBrowserStore {
+                if let netStore = store as? SQLBrowserStore {
                     if try netStore.updateExistingItem(type: .history, url: url, title: title) != nil {
                         return // updated existing entry
                     }

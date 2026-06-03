@@ -82,7 +82,7 @@ extension PageInfo.PageType {
 }
 
 /// A WebBrowserStore that is backed by a SQLContext
-public class NetSkipWebBrowserStore : WebBrowserStore {
+public class SQLBrowserStore : WebBrowserStore {
     let ctx: SQLContext
 
     static let schemaVersionTable = "schema_version"
