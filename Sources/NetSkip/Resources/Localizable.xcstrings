@@ -4655,6 +4655,9 @@
         }
       }
     },
+    "Exit Reader View" : {
+      "comment" : "favicon menu label when reader mode is currently active — tapping returns to the live page"
+    },
     "Experimental" : {
       "comment" : "settings section header for experimental features",
       "localizations" : {
@@ -8444,6 +8447,9 @@
           }
         }
       }
+    },
+    "Reader View" : {
+      "comment" : "favicon menu label that activates Readability.js reader mode on the current page"
     },
     "Recent" : {
       "comment" : "section header on the empty new-tab state listing the most recently visited pages from history"

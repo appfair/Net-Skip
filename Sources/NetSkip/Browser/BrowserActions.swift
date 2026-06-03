@@ -144,10 +144,17 @@ extension BrowserTabView {
     func refreshFavoritedStatus() {
         guard let url = self.currentURL else {
             isCurrentPageFavorited = false
+            isCurrentPageInReaderMode = false
             return
         }
         let favorites = trying(operation: { try store.loadItems(type: .favorite, ids: []) }) ?? []
         isCurrentPageFavorited = favorites.contains(where: { $0.url == url })
+        // Keep the reader-mode mirror in sync when the URL changes —
+        // navigating to a different page (or switching tabs) clears
+        // reader mode on the view-model side; this reflects that on
+        // the parent's `@State` so the menu re-renders to "Reader
+        // View".
+        isCurrentPageInReaderMode = currentViewModel?.inReaderMode ?? false
     }
 
     // MARK: - Sheet present actions

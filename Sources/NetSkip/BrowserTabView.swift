@@ -102,6 +102,16 @@ import NetSkipMiniApp
     @State var confirmCloseAllTabs: Bool = false
     @State var isCurrentPageFavorited: Bool = false
 
+    /// Mirror of the selected tab's `BrowserViewModel.inReaderMode`
+    /// kept on the parent's `@State` so menu re-renders pick up the
+    /// flip immediately — class-property mutations on
+    /// `BrowserViewModel` do reach the per-tab `BrowserView` (it
+    /// holds the view-model as a `@Binding`), but SwiftUI doesn't
+    /// propagate those observations back up to the sibling chrome
+    /// in this composition. Kept in sync by `toggleReaderModeAction`
+    /// and the `currentURL`-change handler.
+    @State var isCurrentPageInReaderMode: Bool = false
+
     public init(configuration: WebEngineConfiguration, store: WebBrowserStore) {
         self.configuration = configuration
         self.store = store
@@ -240,6 +250,8 @@ import NetSkipMiniApp
                     openInExternalBrowserAction: { self.openInExternalBrowserAction() },
                     pageZoomAction: { self.pageZoomAction() },
                     toggleDesktopSiteAction: { self.toggleDesktopSiteAction() },
+                    toggleReaderModeAction: { self.toggleReaderModeAction() },
+                    isInReaderMode: { self.isCurrentPageInReaderMode },
                     viewModel: tab,
                     showBottomBar: $showBottomBar
                 )

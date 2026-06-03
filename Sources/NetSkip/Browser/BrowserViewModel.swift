@@ -36,6 +36,13 @@ import NetSkipModel
     /// query immediately, then clears the flag.
     var shouldFocusURLBar: Bool = false
 
+    /// True when the WebView is currently rendering the
+    /// Readability-extracted article view instead of the live page.
+    /// Cleared automatically when the tab navigates to a different
+    /// URL (see `BrowserView.updatePageURL`) so reader mode never
+    /// leaks across navigations.
+    var inReaderMode: Bool = false
+
     public init(id: PageInfo.ID, navigator: WebViewNavigator, configuration: WebEngineConfiguration, store: WebBrowserStore) {
         self.id = id
         self.navigator = navigator

@@ -5,6 +5,18 @@ import NetSkipModel
 
 #if SKIP || os(iOS)
 
+extension PageInfo {
+    /// `ForEach`-friendly key that namespaces a `PageInfo.id` so it can
+    /// never collide with another `ForEach`'s integer-keyed items
+    /// sharing the same `List`/`LazyColumn` — the cause of the
+    /// `Key "1" was already used` crash in `suggestionsView` when a
+    /// history row's `id == 1` and the second search suggestion's
+    /// enumerated index also resolved to `1`.
+    var uniqueHistoryRowKey: String {
+        return "history-\(id)"
+    }
+}
+
 @MainActor struct BrowserView: View {
     let configuration: WebEngineConfiguration
     let store: WebBrowserStore
@@ -20,6 +32,8 @@ import NetSkipModel
     let openInExternalBrowserAction: () -> Void
     let pageZoomAction: () -> Void
     let toggleDesktopSiteAction: () -> Void
+    let toggleReaderModeAction: () -> Void
+    let isInReaderMode: () -> Bool
     @Binding var viewModel: BrowserViewModel
 
     @Binding var showBottomBar: Bool
@@ -222,6 +236,14 @@ import NetSkipModel
                     pageInfo.url = urlString
                     _ = trying { try store.saveItems(type: .active, items: [pageInfo]) }
                 }
+            }
+            // Exit reader mode when the user navigates somewhere new.
+            // Reader mode is per-URL: once you click a link inside the
+            // article view, you're on a different document and the
+            // injected reader-mode DOM is gone, so the flag has to
+            // come back off so the menu label re-reads "Reader View".
+            if oldURL?.absoluteString != newURL.absoluteString && viewModel.inReaderMode {
+                viewModel.inReaderMode = false
             }
             showBottomBar = true // when the URL changes, always show the bottom bar again
         }
@@ -686,7 +708,16 @@ import NetSkipModel
             // visual "duplicate URL bar" effect (the suggestion row at the top looks identical
             // to the URL bar at the bottom).
             let typed = viewModel.urlTextField
-            let filteredSuggestions = (currentSuggestions?.suggestions ?? []).filter { $0 != typed }
+            let filteredSuggestions: [String] = {
+                var seen: Set<String> = []
+                var result: [String] = []
+                for suggestion in (currentSuggestions?.suggestions ?? []) {
+                    if suggestion == typed { continue }
+                    if !seen.insert(suggestion).inserted { continue }
+                    result.append(suggestion)
+                }
+                return result
+            }()
             // When the user has typed something, fish out any history
             // entries whose title or URL contains the substring. We
             // show them at the TOP of the suggestions list — a
@@ -716,7 +747,16 @@ import NetSkipModel
             if !filteredSuggestions.isEmpty || !historyMatches.isEmpty {
                 List {
                     if !historyMatches.isEmpty {
-                        ForEach(historyMatches) { item in
+                        // Prefix each row's key with `history-` so it can't
+                        // collide with the search-suggestion ForEach below
+                        // (which keys on its array index). Without the
+                        // prefix a history row at id=1 and the second
+                        // suggestion at index=1 would both produce key
+                        // `"1"` inside Compose's LazyColumn and crash with
+                        // `Key "1" was already used. If you are using
+                        // LazyColumn/Row please make sure you provide a
+                        // unique key for each item.`
+                        ForEach(historyMatches, id: \.uniqueHistoryRowKey) { item in
                             Button {
                                 if let url = item.url {
                                     withAnimation {
@@ -750,7 +790,7 @@ import NetSkipModel
                             .buttonStyle(.plain)
                         }
                     }
-                    ForEach(Array(filteredSuggestions.enumerated()), id: \.0) { (index, suggestion) in
+                    ForEach(Array(filteredSuggestions.enumerated()), id: \.element) { (index, suggestion) in
                         Button {
                             withAnimation {
                                 self.submitURL(suggestion)
@@ -857,6 +897,25 @@ import NetSkipModel
     /// History, Downloads, Settings, …) live in the ellipsisMenu on
     /// the bottom toolbar.
     @ViewBuilder func faviconPageMenu() -> some View {
+        // The reader-mode flag is mirrored on the parent's @State so
+        // its flip triggers an unconditional menu rebuild — class
+        // property mutations alone don't propagate observation back
+        // through the action closures.
+        let inReader = isInReaderMode()
+        Button(action: toggleReaderModeAction) {
+            Label {
+                if inReader {
+                    Text("Exit Reader View", bundle: .module, comment: "favicon menu label when reader mode is currently active — tapping returns to the live page")
+                } else {
+                    Text("Reader View", bundle: .module, comment: "favicon menu label that activates Readability.js reader mode on the current page")
+                }
+            } icon: {
+                Image("book", bundle: .module)
+            }
+        }
+        .accessibilityIdentifier(inReader ? "menu.exitReaderMode" : "menu.readerMode")
+        .disabled(state.url == nil)
+
         Button(action: findOnPageAction) {
             Label {
                 Text("Find on Page", bundle: .module, comment: "favicon menu: open the in-page find UI")
