@@ -9,12 +9,23 @@ import NetSkipModel
     let configuration: WebEngineConfiguration
     let store: WebBrowserStore
     let submitURL: (String) -> ()
+    // Per-page actions surfaced via the favicon menu. Their state
+    // (find bar visibility, favorites store, page zoom sheet) lives
+    // on the parent `BrowserTabView`, so we receive them as closures
+    // rather than re-implementing them locally.
+    let findOnPageAction: () -> Void
+    let favoriteAction: () -> Void
+    let isFavorited: () -> Bool
+    let copyURLAction: () -> Void
+    let openInExternalBrowserAction: () -> Void
+    let pageZoomAction: () -> Void
+    let toggleDesktopSiteAction: () -> Void
     @Binding var viewModel: BrowserViewModel
 
     @Binding var showSettings: Bool
     @Binding var showBottomBar: Bool
 
-    @State var currentSuggestions: SearchSuggestions?
+    @State var currentSuggestions: SearchSuggestions? = nil
     @State var triggerPageLoadHaptic: Bool = false
     @State var pendingDownload: WebDownloadRequest? = nil
     @State var showDownloadPrompt: Bool = false
@@ -23,6 +34,7 @@ import NetSkipModel
     #endif
 
     @Environment(NetSkipSettings.self) var settings
+    @Environment(\.colorScheme) var colorScheme
 
     @FocusState var isURLBarFocused: Bool
 
@@ -196,21 +208,36 @@ import NetSkipModel
             // in the overview still shows the right domain after the
             // user leaves this tab (the WebView's live `state.url` is
             // not always populated for background tabs).
-            viewModel.savedURL = blank ? "" : urlString
-            showBottomBar = true // when the URL changes, always show the bottom bar again
-            if var pageInfo = trying(operation: { try store.loadItems(type: .active, ids: [viewModel.id]) })?.first {
-                pageInfo.url = blank ? nil : urlString
-                _ = trying { try store.saveItems(type: .active, items: [pageInfo]) }
+            //
+            // Important: only update savedURL FORWARD — never clobber
+            // a real URL back to "" because the WebView transiently
+            // reported `about:blank`. That happens when the tab is
+            // backgrounded (TabView dismantles its WKWebView) and the
+            // KVO fires one last time with the SDK's placeholder URL.
+            // Letting that overwrite savedURL was the cause of the
+            // "first tab shows as blank New Tab after opening a link
+            // in a new tab" regression.
+            if !blank {
+                viewModel.savedURL = urlString
+                if var pageInfo = trying(operation: { try store.loadItems(type: .active, ids: [viewModel.id]) })?.first {
+                    pageInfo.url = urlString
+                    _ = trying { try store.saveItems(type: .active, items: [pageInfo]) }
+                }
             }
+            showBottomBar = true // when the URL changes, always show the bottom bar again
         }
     }
 
     func updatePageTitle(_ oldTitle: String?, _ newTitle: String?) {
-        if let newTitle = newTitle {
+        if let newTitle = newTitle, !newTitle.isEmpty {
             logger.log("loaded page title: \(newTitle)")
             // Same mirror as `updatePageURL` — keeps the tab card
             // showing the page title in the overview after the user
-            // navigates away to another tab.
+            // navigates away to another tab. Empty titles are
+            // suppressed for the same reason `updatePageURL` ignores
+            // about:blank: a backgrounded tab's WKWebView fires a
+            // final KVO with "" which would otherwise blank out the
+            // tab's saved title.
             viewModel.savedTitle = newTitle
             addPageToHistory()
             if var pageInfo = trying(operation: { try store.loadItems(type: .active, ids: [viewModel.id]) })?.first {
@@ -302,7 +329,7 @@ import NetSkipModel
             }
             urlBarComponentView()
         }
-        .background(showBottomBar ? urlBarBackground : Color.clear)
+        .background(showBottomBar ? urlBarBackground(for: colorScheme) : Color.clear)
             #if !SKIP
             .onChange(of: state.url, updatePageURL)
             .onChange(of: state.pageTitle, updatePageTitle)
@@ -352,8 +379,15 @@ import NetSkipModel
             // background — DuckDuckGo / Safari-style.
             ZStack(alignment: .bottom) {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(showBottomBar ? Color.white : .clear)
-                    .shadow(color: Color.black.opacity(showBottomBar ? 0.08 : 0.0), radius: 3.0, x: 0.0, y: 1.0)
+                    .fill(showBottomBar ? urlBarPillFill(for: colorScheme) : .clear)
+                    // Drop-shadow only carries the white pill off
+                    // the chrome in light mode; in dark mode the
+                    // chrome and pill are already two shades of
+                    // grey so the elevation reads through fill
+                    // contrast and a black drop-shadow only
+                    // muddies the edge. Material Design says
+                    // exactly this.
+                    .shadow(color: Color.black.opacity(showBottomBar && colorScheme == .light ? 0.08 : 0.0), radius: 3.0, x: 0.0, y: 1.0)
 
                 ProgressView(value: state.estimatedProgress ?? 0.0)
                     .progressViewStyle(.linear)
@@ -368,23 +402,6 @@ import NetSkipModel
             .padding(.top, 4.0)
             .padding(.bottom, 4.0)
             .padding(.horizontal, showBottomBar ? 12.0 : 0.0)
-
-            // Favicon pinned to the LEADING edge of the URL bar
-            // capsule (not crowding the centered URL text). Visible
-            // any time the URL bar is collapsed AND the page has a
-            // real URL — Safari / Chrome / DuckDuckGo layout. Hit
-            // testing is disabled so taps fall through to the
-            // underlying TextField for focus.
-            if showBottomBar, !isURLBarFocused,
-               let pageURL = state.url,
-               pageURL.absoluteString != "about:blank" {
-                HStack {
-                    FaviconView(urlString: pageURL.absoluteString, size: 24.0, cornerRadius: 5.0)
-                        .padding(.leading, 24.0)
-                    Spacer()
-                }
-                .allowsHitTesting(false)
-            }
 
             // The TextField is ALWAYS in the view hierarchy so taps
             // always land on it and @FocusState works on iOS.
@@ -454,6 +471,7 @@ import NetSkipModel
                 if isURLBarFocused {
                     Button(action: { self.viewModel.urlTextField = "" }, label: {
                         Image("xmark.circle.fill", bundle: .module)
+                            .font(.system(size: 22))
                             .foregroundStyle(.secondary)
                             #if !SKIP
                             .symbolRenderingMode(.hierarchical)
@@ -466,7 +484,7 @@ import NetSkipModel
                     // Stop loading button
                     Button(action: { self.viewModel.navigator.stopLoading() }, label: {
                         Image("xmark", bundle: .module)
-                            .font(.system(size: 18))
+                            .font(.system(size: 22))
                             .foregroundStyle(.secondary)
                     })
                     .buttonStyle(.plain)
@@ -488,7 +506,7 @@ import NetSkipModel
                         .accessibilityIdentifier("menu.hardReload")
                     } label: {
                         Image("arrow.clockwise", bundle: .module)
-                            .font(.system(size: 18))
+                            .font(.system(size: 22))
                             .foregroundStyle(.secondary)
                     } primaryAction: {
                         self.viewModel.navigator.reload()
@@ -519,14 +537,17 @@ import NetSkipModel
                     return false
                 }()
                 HStack(spacing: 4) {
-                    if state.isLoading {
-                        Text("Loading...", bundle: .module, comment: "URL bar text shown while a page is loading")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.secondary)
-                    } else if hasRealURL, let pageURL = state.url {
+                    if hasRealURL, let pageURL = state.url {
+                        // Show the destination domain even while the
+                        // page is still loading — the URL bar's
+                        // bottom-edge progress bar conveys "loading",
+                        // so a "Loading…" string here just hides the
+                        // information the user actually wants (where
+                        // are we headed?). Safari / Chrome / Firefox
+                        // all surface the URL throughout the load.
                         Text(domainFromURL(pageURL.absoluteString))
                             .font(.system(size: 20))
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(state.isLoading ? Color.secondary : Color.primary)
                             .lineLimit(1)
                     } else {
                         Text("Search or enter website name", bundle: .module, comment: "placeholder string for URL bar")
@@ -537,6 +558,31 @@ import NetSkipModel
                 .allowsHitTesting(false)
                 .frame(width: showBottomBar ? nil : 0.0)
                 .opacity(showBottomBar ? 1.0 : 0.0)
+            }
+
+            // Favicon pinned to the LEADING edge of the URL bar
+            // capsule. Tapping it reveals the page-specific actions
+            // menu (Find on Page, Add to Favorites, Share, Copy URL,
+            // …). Placed LAST in the ZStack so its Menu sits in front
+            // of the TextField — taps within the favicon's small
+            // bounds open the menu, while everywhere else still falls
+            // through to the TextField for URL focus. The Spacer
+            // inside the HStack has hit testing disabled so it
+            // doesn't swallow taps outside the favicon.
+            if showBottomBar, !isURLBarFocused,
+               let pageURL = state.url,
+               pageURL.absoluteString != "about:blank" {
+                HStack {
+                    Menu {
+                        faviconPageMenu()
+                    } label: {
+                        FaviconView(urlString: pageURL.absoluteString, size: 30.0, cornerRadius: 6.0)
+                    }
+                    .accessibilityIdentifier("button.url.faviconMenu")
+                    .padding(.leading, 20.0)
+                    Spacer()
+                        .allowsHitTesting(false)
+                }
             }
         }
         .contextMenu {
@@ -642,8 +688,69 @@ import NetSkipModel
             // to the URL bar at the bottom).
             let typed = viewModel.urlTextField
             let filteredSuggestions = (currentSuggestions?.suggestions ?? []).filter { $0 != typed }
-            if !filteredSuggestions.isEmpty {
+            // When the user has typed something, fish out any history
+            // entries whose title or URL contains the substring. We
+            // show them at the TOP of the suggestions list — a
+            // matching past visit is almost always more useful than
+            // a search suggestion, and saves a roundtrip through the
+            // search engine for sites the user has been to before.
+            let historyMatches: [PageInfo] = {
+                guard !typed.isEmpty else { return [] }
+                let query = typed.lowercased()
+                let all = trying(operation: {
+                    try store.loadItems(type: .history, ids: [])
+                }) ?? []
+                var seen: Set<String> = []
+                var matches: [PageInfo] = []
+                for item in all {
+                    let urlMatch = (item.url ?? "").lowercased().contains(query)
+                    let titleMatch = (item.title ?? "").lowercased().contains(query)
+                    guard urlMatch || titleMatch else { continue }
+                    let key = item.url ?? ""
+                    if seen.contains(key) { continue }
+                    seen.insert(key)
+                    matches.append(item)
+                    if matches.count >= 4 { break }
+                }
+                return matches
+            }()
+            if !filteredSuggestions.isEmpty || !historyMatches.isEmpty {
                 List {
+                    if !historyMatches.isEmpty {
+                        ForEach(historyMatches) { item in
+                            Button {
+                                if let url = item.url {
+                                    withAnimation {
+                                        self.submitURL(url)
+                                        self.isURLBarFocused = false
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    FaviconView(urlString: item.url, size: 18.0, cornerRadius: 4.0)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(item.title ?? item.url ?? "")
+                                            .font(.body)
+                                            .lineLimit(1)
+                                        if item.title != nil, let urlString = item.url {
+                                            Text(urlString)
+                                                .font(.caption)
+                                                .foregroundStyle(Color.gray)
+                                                .lineLimit(1)
+                                                #if !SKIP
+                                                .truncationMode(.middle)
+                                                #endif
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                #if !SKIP
+                                .contentShape(Rectangle())
+                                #endif
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                     ForEach(Array(filteredSuggestions.enumerated()), id: \.0) { (index, suggestion) in
                         Button {
                             withAnimation {
@@ -690,44 +797,49 @@ import NetSkipModel
                     .accessibilityIdentifier("view.newTab.empty")
                     Spacer()
                 } else {
+                    // Note: avoid `Section { ... } header: { ... }` —
+                    // on Android the Compose translation wraps the
+                    // section in a sticky header that swallows row
+                    // taps, so tapping a Recent item never invokes
+                    // submitURL. A plain header row inside the List
+                    // works on both platforms.
                     List {
-                        Section {
-                            ForEach(top) { item in
-                                Button {
-                                    if let url = item.url {
-                                        withAnimation {
-                                            self.submitURL(url)
-                                            self.isURLBarFocused = false
-                                        }
+                        Text("Recent", bundle: .module, comment: "section header on the empty new-tab state listing the most recently visited pages from history")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("view.newTab.recent")
+                        ForEach(top) { item in
+                            Button {
+                                if let url = item.url {
+                                    withAnimation {
+                                        self.submitURL(url)
+                                        self.isURLBarFocused = false
                                     }
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        FaviconView(urlString: item.url, size: 24.0, cornerRadius: 5.0)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(item.title ?? item.url ?? "")
-                                                .font(.body)
-                                                .lineLimit(1)
-                                            if item.title != nil, let urlString = item.url {
-                                                Text(urlString)
-                                                    .font(.caption)
-                                                    .foregroundStyle(Color.gray)
-                                                    .lineLimit(1)
-                                                    #if !SKIP
-                                                    .truncationMode(.middle)
-                                                    #endif
-                                            }
-                                        }
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    #if !SKIP
-                                    .contentShape(Rectangle())
-                                    #endif
                                 }
-                                .buttonStyle(.plain)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    FaviconView(urlString: item.url, size: 24.0, cornerRadius: 5.0)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.title ?? item.url ?? "")
+                                            .font(.body)
+                                            .lineLimit(1)
+                                        if item.title != nil, let urlString = item.url {
+                                            Text(urlString)
+                                                .font(.caption)
+                                                .foregroundStyle(Color.gray)
+                                                .lineLimit(1)
+                                                #if !SKIP
+                                                .truncationMode(.middle)
+                                                #endif
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                #if !SKIP
+                                .contentShape(Rectangle())
+                                #endif
                             }
-                        } header: {
-                            Text("Recent", bundle: .module, comment: "section header on the empty new-tab state listing the most recently visited pages from history")
-                                .accessibilityIdentifier("view.newTab.recent")
+                            .buttonStyle(.plain)
                         }
                     }
                     .listStyle(.plain)
@@ -738,6 +850,86 @@ import NetSkipModel
         #if !SKIP
         .background(Color(UIColor.systemBackground))
         #endif
+    }
+
+    /// Page-specific menu shown when the user taps the favicon in the
+    /// URL bar. Actions that act on / mutate the currently-loaded page
+    /// live here; non-page-specific global actions (Bookmarks,
+    /// History, Downloads, Settings, …) live in the ellipsisMenu on
+    /// the bottom toolbar.
+    @ViewBuilder func faviconPageMenu() -> some View {
+        Button(action: findOnPageAction) {
+            Label {
+                Text("Find on Page", bundle: .module, comment: "favicon menu: open the in-page find UI")
+            } icon: {
+                Image("magnifyingglass", bundle: .module)
+            }
+        }
+        .accessibilityIdentifier("menu.findOnPage")
+
+        Button(action: favoriteAction) {
+            Label {
+                if isFavorited() {
+                    Text("Remove from Favorites", bundle: .module, comment: "favicon menu: remove this page from favorites")
+                } else {
+                    Text("Add to Favorites", bundle: .module, comment: "favicon menu: bookmark this page")
+                }
+            } icon: {
+                Image("star", bundle: .module)
+            }
+        }
+        .accessibilityIdentifier(isFavorited() ? "menu.removeFavorite" : "menu.addFavorite")
+        .disabled(state.url == nil)
+
+        ShareLink(item: state.url?.absoluteString ?? fallbackURL) {
+            Label {
+                Text("Share", bundle: .module, comment: "favicon menu: share the current page URL via the system share sheet")
+            } icon: {
+                Image("ios_share", bundle: .module)
+            }
+        }
+        .accessibilityIdentifier("menu.share")
+        .disabled(state.url == nil)
+
+        Button(action: copyURLAction) {
+            Label {
+                Text("Copy URL", bundle: .module, comment: "favicon menu: copy the current page URL to the clipboard")
+            } icon: {
+                Image("content_copy", bundle: .module)
+            }
+        }
+        .accessibilityIdentifier("menu.copyURL")
+        .disabled(state.url == nil)
+
+        Button(action: openInExternalBrowserAction) {
+            Label {
+                Text("Open in External Browser", bundle: .module, comment: "favicon menu: hand the current page URL to the system's default browser")
+            } icon: {
+                Image("open_in_browser", bundle: .module)
+            }
+        }
+        .accessibilityIdentifier("menu.openInExternalBrowser")
+        .disabled(state.url == nil)
+
+        Divider()
+
+        Button(action: pageZoomAction) {
+            Label {
+                Text("Page Zoom", bundle: .module, comment: "favicon menu: adjust text zoom for the current page")
+            } icon: {
+                Image("textformat.size", bundle: .module)
+            }
+        }
+        .accessibilityIdentifier("menu.pageZoom")
+
+        Button(action: toggleDesktopSiteAction) {
+            Label {
+                Text(settings.requestDesktopSite ? "Mobile Site" : "Desktop Site", bundle: .module, comment: "favicon menu: switch between requesting the desktop and mobile versions of the current site")
+            } icon: {
+                Image(settings.requestDesktopSite ? "smartphone" : "computer", bundle: .module)
+            }
+        }
+        .accessibilityIdentifier("menu.desktopSite")
     }
 
     func fetchSearchSuggestions(string: String) async throws {

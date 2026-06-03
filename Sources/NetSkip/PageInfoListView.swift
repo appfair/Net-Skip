@@ -58,10 +58,25 @@ struct PageInfoListView<ToolbarItems : ToolbarContent> : View {
                 }
             }
             if items.isEmpty {
-                Text("No Items", bundle: .module, comment: "sheet placeholder text when there are no items available")
-                    .font(.title)
-                    .opacity(0.8)
-                    .frame(maxHeight: .infinity)
+                // Friendlier empty state — icon + title + hint —
+                // instead of a bare "No Items" label. Matches Safari
+                // / Chrome empty-list treatments.
+                VStack(spacing: 14) {
+                    Spacer()
+                    Image(type == .favorite ? "star" : "history", bundle: .module)
+                        .font(.system(size: 48))
+                        .foregroundStyle(.secondary)
+                    Text(type == .favorite ? "No Favorites Yet" : "No History Yet", bundle: .module, comment: "title shown in the History or Favorites sheet when there are zero entries")
+                        .font(.title2)
+                        .foregroundStyle(.primary)
+                    Text(type == .favorite ? "Tap the star in the More menu to favorite the page you're on." : "Pages you visit will appear here.", bundle: .module, comment: "supporting copy below the empty-state title in the History or Favorites sheet")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if filteredItems.isEmpty {
                 Text("No matches", bundle: .module, comment: "shown in the History/Favorites list when the active search filter has zero results")
                     .font(.title3)

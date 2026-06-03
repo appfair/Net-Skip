@@ -11,15 +11,24 @@ import NetSkipMiniApp
 
 let fallbackURL = "about:blank"
 
-/// Opaque chrome background — used by both the URL bar capsule and the
-/// bottom toolbar so the WebView's content never bleeds through.
-/// `secondarySystemBackground` adapts to dark mode on iOS; Skip's
-/// translation of the same Color picks up Material's secondary surface.
-#if SKIP
-let urlBarBackground = Color(white: 0.92)
-#else
-let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
-#endif
+/// Opaque chrome background — used by the bottom toolbar and the
+/// surround of the URL bar capsule. Adapts to the active colour
+/// scheme so dark mode doesn't leave a hard-coded light grey strip
+/// floating under the toolbar buttons. Call as a function with the
+/// environment colour scheme so the same shade resolves on both
+/// platforms (Skip's Compose translation doesn't track
+/// `UIColor.secondarySystemBackground` semantics).
+func urlBarBackground(for scheme: ColorScheme) -> Color {
+    scheme == .dark ? Color(white: 0.16) : Color(white: 0.92)
+}
+
+/// Inner fill of the rounded-rectangle "search pill" inside the URL
+/// bar. White in light mode for high text contrast; a slightly
+/// elevated dark grey in dark mode to stay readable against the
+/// darker toolbar surround without flashing pure white.
+func urlBarPillFill(for scheme: ColorScheme) -> Color {
+    scheme == .dark ? Color(white: 0.24) : Color.white
+}
 //
 //let bottomBarBackground = Color.clear
 
@@ -52,6 +61,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     @State var triggerStop = false
 
     @Environment(NetSkipSettings.self) var settings
+    @Environment(\.colorScheme) var colorScheme
 
     /// In-flight per-tab UI state (not a user preference) — keep on AppStorage.
     @AppStorage("selectedTabState") var selectedTabState: String = ""
@@ -87,12 +97,114 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     public init(configuration: WebEngineConfiguration, store: WebBrowserStore) {
         self.configuration = configuration
         self.store = store
+        // Install link context menu actions on the configuration the
+        // moment we have a reference to it. `.onAppear` was firing
+        // *after* the WebView had already initialized its
+        // coordinator with the configuration's current
+        // `linkContextMenuActions` value (nil), so the iOS
+        // `WKUIDelegate.contextMenuConfigurationForElement` hit the
+        // nil branch and fell through to WKWebView's default menu.
+        // Setting here in init guarantees the provider is in place
+        // before any WebView coordinator inspects the configuration.
+        Self.installLinkContextMenuActions(on: configuration, store: store)
+    }
+
+    /// Hand skip-web a builder for the six-item link long-press menu.
+    /// The same list is rendered as native `UIAction`s inside the
+    /// WKWebView preview menu on iOS and as native `PopupMenu` items
+    /// on Android — see `WebEngineConfiguration.linkContextMenuActions`.
+    /// Static so it can run from `init` before `self` is fully
+    /// formed; takes the configuration + store as parameters and
+    /// stashes the per-action handlers as standalone closures.
+    static func installLinkContextMenuActions(on configuration: WebEngineConfiguration, store: WebBrowserStore) {
+        //logger.info("installLinkContextMenuActions on configuration id=\(ObjectIdentifier(configuration).hashValue)")
+        configuration.linkContextMenuActions = { url in
+            logger.info("linkContextMenuActions provider invoked for url=\(url)")
+            return [
+                WebContextMenuAction(title: NSLocalizedString("Open", bundle: .module, comment: "link long-press menu: open the URL in the current tab")) { url in
+                    NotificationCenter.default.post(name: Self.openLinkNotification, object: nil, userInfo: ["url": url, "newTab": false])
+                },
+                WebContextMenuAction(title: NSLocalizedString("Open in New Tab", bundle: .module, comment: "link long-press menu: open the URL in a new tab")) { url in
+                    NotificationCenter.default.post(name: Self.openLinkNotification, object: nil, userInfo: ["url": url, "newTab": true])
+                },
+                WebContextMenuAction(title: NSLocalizedString("Add Bookmark", bundle: .module, comment: "link long-press menu: bookmark the URL")) { url in
+                    Self.addLinkAsBookmark(url, store: store)
+                },
+                WebContextMenuAction(title: NSLocalizedString("Copy Link", bundle: .module, comment: "link long-press menu: copy the URL to the clipboard")) { url in
+                    Self.copyLinkToClipboard(url)
+                },
+                WebContextMenuAction(title: NSLocalizedString("Download Link", bundle: .module, comment: "link long-press menu: download the URL")) { url in
+                    Self.requestLinkDownload(url)
+                },
+                WebContextMenuAction(title: NSLocalizedString("Share…", bundle: .module, comment: "link long-press menu: open the share sheet for the URL")) { url in
+                    Self.shareLink(url)
+                },
+            ]
+        }
+    }
+
+    /// Notification dispatched by the link context menu's Open /
+    /// Open in New Tab handlers so the still-being-built
+    /// `BrowserTabView` instance (the one rendering the WebView) can
+    /// react via `onReceive`. `userInfo`: `url: URL`, `newTab: Bool`.
+    static var openLinkNotification: Notification.Name {
+        return Notification.Name("netSkipLinkContextOpenRequested")
+    }
+
+    static func addLinkAsBookmark(_ url: URL, store: WebBrowserStore) {
+        let urlString = url.absoluteString
+        guard !urlString.isEmpty else { return }
+        let favorites = (try? store.loadItems(type: .favorite, ids: [])) ?? []
+        if favorites.contains(where: { $0.url == urlString }) { return }
+        _ = try? store.saveItems(type: .favorite, items: [PageInfo(url: urlString, title: nil)])
+    }
+
+    static func copyLinkToClipboard(_ url: URL) {
+        #if SKIP
+        let ctx = ProcessInfo.processInfo.androidContext
+        let cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("URL", url.absoluteString))
+        #else
+        UIPasteboard.general.url = url
+        #endif
+    }
+
+    static func requestLinkDownload(_ url: URL) {
+        let request = WebDownloadRequest(url: url, suggestedFilename: url.lastPathComponent)
+        NetSkipDownloadManager.shared.enqueue(request)
+    }
+
+    static func shareLink(_ url: URL) {
+        #if SKIP
+        let ctx = ProcessInfo.processInfo.androidContext
+        let intent = android.content.Intent(android.content.Intent.ACTION_SEND)
+        intent.setType("text/plain")
+        intent.putExtra(android.content.Intent.EXTRA_TEXT, url.absoluteString)
+        let chooser = android.content.Intent.createChooser(intent, nil)
+        chooser.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        ctx.startActivity(chooser)
+        #else
+        let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        let scenes = UIApplication.shared.connectedScenes
+        let windowScene = scenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        let rootVC = windowScene?.keyWindow?.rootViewController
+        var presenter: UIViewController? = rootVC
+        while let presented = presenter?.presentedViewController {
+            presenter = presented
+        }
+        presenter?.present(activity, animated: true)
+        #endif
     }
 
     public var body: some View {
         // SkipUI insets the top edge by the system status bar automatically on Android
         // (matching iOS), so no manual safe-area padding is needed here.
         bodyContent
+            .onReceive(NotificationCenter.default.publisher(for: Self.openLinkNotification)) { note in
+                guard let url = note.userInfo?["url"] as? URL else { return }
+                let newTab = (note.userInfo?["newTab"] as? Bool) ?? false
+                openURL(url: url.absoluteString, newTab: newTab)
+            }
     }
 
     @ViewBuilder
@@ -201,12 +313,11 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     /// wrapper. Collapses to zero height when `showBottomBar` is off so
     /// the URL bar's compact slim mode is the only thing left visible.
     @ViewBuilder func bottomToolbar() -> some View {
-        // Six-item bottom toolbar: back, forward, new tab, share,
-        // tab list, "..." more menu. Each item gets a fixed square
-        // hit-target so different glyph aspect ratios (a thin
-        // chevron next to a chunky share arrow next to a circle of
-        // dots) don't render at visually different sizes — the user
-        // explicitly asked for uniform toolbar buttons.
+        // Five-item bottom toolbar: back, forward, tab list, new tab,
+        // "..." more menu. Share lives in the more-menu now — it was
+        // redundant in the toolbar. Each item gets a fixed square
+        // hit-target so different glyph aspect ratios don't render at
+        // visually different sizes.
         HStack(spacing: 0) {
             backButton()
                 .frame(width: toolbarItemSize, height: toolbarItemSize)
@@ -214,13 +325,10 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             forwardButton()
                 .frame(width: toolbarItemSize, height: toolbarItemSize)
             Spacer()
-            newTabToolbarButton()
-                .frame(width: toolbarItemSize, height: toolbarItemSize)
-            Spacer()
-            shareToolbarButton()
-                .frame(width: toolbarItemSize, height: toolbarItemSize)
-            Spacer()
             tabsButton()
+                .frame(width: toolbarItemSize, height: toolbarItemSize)
+            Spacer()
+            newTabToolbarButton()
                 .frame(width: toolbarItemSize, height: toolbarItemSize)
             Spacer()
             ellipsisMenu()
@@ -230,7 +338,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
-        .background(urlBarBackground)
+        .background(urlBarBackground(for: colorScheme))
         // Fixed height when shown; collapses to 0 when the user
         // scrolls down. SwiftUI's natural-sized `nil` height doesn't
         // transpile cleanly to Compose, and `.infinity` greedily
@@ -254,7 +362,21 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         // the two platforms.
         TabView(selection: $selectedTab) {
             ForEach($tabs) { tab in
-                BrowserView(configuration: configuration, store: store, submitURL: { self.submitURL(text: $0) }, viewModel: tab, showSettings: $showSettings, showBottomBar: $showBottomBar)
+                BrowserView(
+                    configuration: configuration,
+                    store: store,
+                    submitURL: { self.submitURL(text: $0) },
+                    findOnPageAction: { self.findOnPageAction() },
+                    favoriteAction: { self.favoriteAction() },
+                    isFavorited: { self.isCurrentPageFavorited },
+                    copyURLAction: { self.copyURLAction() },
+                    openInExternalBrowserAction: { self.openInExternalBrowserAction() },
+                    pageZoomAction: { self.pageZoomAction() },
+                    toggleDesktopSiteAction: { self.toggleDesktopSiteAction() },
+                    viewModel: tab,
+                    showSettings: $showSettings,
+                    showBottomBar: $showBottomBar
+                )
             }
         }
         .background(LinearGradient(colors: [currentState?.themeColor ?? Color.clear, Color.clear], startPoint: .top, endPoint: .center))
@@ -534,8 +656,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         let query = tabSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if query.isEmpty { return tabs }
         return tabs.filter { tab in
-            let titleSource = tab.state.pageTitle ?? tab.savedTitle
-            let urlSource = tab.state.url?.absoluteString ?? tab.savedURL
+            let titleSource = Self.effectiveTitle(for: tab)
+            let urlSource = Self.effectiveURL(for: tab)
             return titleSource.lowercased().contains(query) || urlSource.lowercased().contains(query)
         }
     }
@@ -703,8 +825,8 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
 
     @ViewBuilder func tabCardView(tab: BrowserViewModel) -> some View {
         let isActive = tab.id == selectedTab
-        let title = tab.state.pageTitle ?? tab.savedTitle
-        let urlString = tab.state.url?.absoluteString ?? tab.savedURL
+        let title = Self.effectiveTitle(for: tab)
+        let urlString = Self.effectiveURL(for: tab)
         let domain = tabDomainFromURL(urlString)
         let snapshotImage = loadSnapshotImage(for: tab.id)
 
@@ -715,7 +837,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             // down the leaving BrowserView's WebView, neither state
             // nor pixels are recoverable.
             if let outgoing = currentViewModel, outgoing.id != tab.id {
-                if let pageURL = outgoing.state.url {
+                if let pageURL = outgoing.state.url, pageURL.absoluteString != "about:blank" {
                     outgoing.savedURL = pageURL.absoluteString
                 }
                 if let pageTitle = outgoing.state.pageTitle, !pageTitle.isEmpty {
@@ -869,7 +991,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 }
             }
             .accessibilityIdentifier("menu.tabCard.copyURL")
-            .disabled((tab.state.url?.absoluteString ?? tab.savedURL).isEmpty)
+            .disabled(Self.effectiveURL(for: tab).isEmpty)
 
             if tab.isPinned {
                 Button(action: { toggleTabPin(tab) }) {
@@ -937,7 +1059,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     /// currently selected one — needed for the tab-card context menu,
     /// where the user might right-click a background tab.
     func copyURLForTab(_ tab: BrowserViewModel) {
-        let url = tab.state.url?.absoluteString ?? tab.savedURL
+        let url = Self.effectiveURL(for: tab)
         guard !url.isEmpty else { return }
         logger.info("copyURLForTab id=\(tab.id) url=\(url)")
         hapticFeedback()
@@ -1002,14 +1124,17 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
 
     func openURL(url: String, newTab: Bool) {
         logger.log("openURL: \(url) newTab=\(newTab)")
-        // if we have no open tabs, of if the current tab is not blank, then open it in a new URL
-        if self.currentViewModel == nil || (newTab == true && self.currentURL == nil) {
-            newTabAction(url: url) // this will set the current tab
-        }
         var newURL = url
         // if the scheme netskip:// then change it to https://
         if url.hasPrefix("netskip://") {
             newURL = url.replacingOccurrences(of: "netskip://", with: "https://")
+        }
+        // Spawn a fresh tab when the caller asked for one or there's
+        // no current tab to navigate. `newTabAction(url:)` loads the
+        // page into the newly-selected tab, so we're done.
+        if self.currentViewModel == nil || newTab == true {
+            newTabAction(url: newURL)
+            return
         }
         if let navURL = URL(string: newURL) {
             currentNavigator?.load(url: navURL)
@@ -1216,18 +1341,6 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         }
     }
 
-    @ViewBuilder func showHistoryFavoritesButton() -> some View {
-        Button(action: showHistoryFavoritesAction) {
-            Label {
-                Text("Bookmarks", bundle: .module, comment: "bookmarks button label")
-            } icon: {
-                Image("book", bundle: .module)
-                    .font(.system(size: toolbarIconSize))
-            }
-        }
-        .accessibilityIdentifier("button.history.favorites")
-    }
-
     /// Top-level toolbar "new tab" button. Opens a fresh blank tab
     /// with the URL bar auto-focused (via `shouldFocusURLBar` set
     /// inside `newTabAction`) so the user can type immediately.
@@ -1377,7 +1490,16 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
 
     @ViewBuilder func findBar() -> some View {
         HStack(spacing: 8) {
-            TextField("Find on page", text: $findText)
+            // The `TextField("…", text:)` shorthand resolves the
+            // placeholder against the main bundle, so our module's
+            // xcstrings translations for "Find on page" were never
+            // picked up. The `text:prompt:label:` form lets us pass
+            // an explicit bundle-aware `Text` so non-English locales
+            // get the translated placeholder; the label doubles as
+            // the VoiceOver / TalkBack name for the field.
+            TextField(text: $findText, prompt: Text("Find on page", bundle: .module, comment: "placeholder text inside the find-on-page text field")) {
+                Text("Find on page", bundle: .module, comment: "accessibility name for the find-on-page text field")
+            }
                 .textFieldStyle(.plain)
                 .font(.system(size: 15))
                 #if !SKIP
@@ -1535,12 +1657,13 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             .renderingMode(.template)
         #else
         // Android/Skip: dynamic views work fine as toolbar icons
+        let display = tabs.count >= 100 ? "99+" : "\(tabs.count)"
         ZStack {
             RoundedRectangle(cornerRadius: 5)
                 .strokeBorder(lineWidth: 2.0)
                 .frame(width: 28, height: 28)
-            Text("\(tabs.count)")
-                .font(.system(size: 14, weight: .bold))
+            Text(verbatim: display)
+                .font(.system(size: tabs.count >= 100 ? 11.0 : 14.0, weight: .bold))
         }
         #endif
     }
@@ -1554,12 +1677,16 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         if let cached = tabCountImageCache[count] {
             return cached
         }
+        // For tab counts ≥ 100 the three-digit string blows out of
+        // the 28×28 badge; modern browsers show "99+" instead. Two
+        // digits fit comfortably at the 14pt font.
+        let display = count >= 100 ? "99+" : "\(count)"
         let badge = ZStack {
             RoundedRectangle(cornerRadius: 5)
                 .strokeBorder(lineWidth: 2.0)
                 .frame(width: 28, height: 28)
-            Text("\(count)")
-                .font(.system(size: 14, weight: .bold))
+            Text(verbatim: display)
+                .font(.system(size: count >= 100 ? 11.0 : 14.0, weight: .bold))
         }
         .foregroundStyle(Color.primary)
 
@@ -1572,16 +1699,11 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     #endif
 
     @ViewBuilder func ellipsisMenu() -> some View {
+        // Global navigation + app-level actions only. Page-specific
+        // actions (Find on Page, Share, Copy URL, Add to Favorites,
+        // Page Zoom, Desktop/Mobile Site) live in the favicon menu in
+        // the URL bar — see `BrowserView.faviconPageMenu`.
         Menu {
-            Button(action: reloadAction) {
-                Label {
-                    Text("Reload", bundle: .module, comment: "reload button label")
-                } icon: {
-                    Image("arrow.clockwise", bundle: .module)
-                }
-            }
-            .accessibilityIdentifier("menu.reload")
-
             Button(action: homeAction) {
                 Label {
                     Text("Home", bundle: .module, comment: "home button label")
@@ -1591,50 +1713,6 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             }
             .accessibilityIdentifier("menu.home")
 
-            Button(action: findOnPageAction) {
-                Label {
-                    Text("Find on Page", bundle: .module, comment: "find on page button label")
-                } icon: {
-                    Image("magnifyingglass", bundle: .module)
-                }
-            }
-            .accessibilityIdentifier("menu.findOnPage")
-
-            Divider()
-
-            Button(action: favoriteAction) {
-                Label {
-                    if isCurrentPageFavorited {
-                        Text("Remove from Favorites", bundle: .module, comment: "menu label when the current page is already saved as a favorite — tapping removes it")
-                    } else {
-                        Text("Add to Favorites", bundle: .module, comment: "add to favorites button label")
-                    }
-                } icon: {
-                    Image("star", bundle: .module)
-                }
-            }
-            .accessibilityIdentifier(isCurrentPageFavorited ? "menu.removeFavorite" : "menu.addFavorite")
-            .disabled(currentURL == nil)
-
-            ShareLink(item: currentState?.url?.absoluteString ?? fallbackURL) {
-                Label {
-                    Text("Share", bundle: .module, comment: "share button label")
-                } icon: {
-                    Image("ios_share", bundle: .module)
-                }
-            }
-            .accessibilityIdentifier("menu.share")
-
-            Button(action: copyURLAction) {
-                Label {
-                    Text("Copy URL", bundle: .module, comment: "menu label for copying the current page URL to the clipboard")
-                } icon: {
-                    Image("content_copy", bundle: .module)
-                }
-            }
-            .accessibilityIdentifier("menu.copyURL")
-            .disabled(currentState?.url == nil)
-
             Button(action: pasteAndGoAction) {
                 Label {
                     Text("Paste and Go", bundle: .module, comment: "menu label for pasting the clipboard contents into the URL bar and navigating to that page")
@@ -1643,33 +1721,6 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                 }
             }
             .accessibilityIdentifier("menu.pasteAndGo")
-
-            Button(action: openInExternalBrowserAction) {
-                Label {
-                    Text("Open in External Browser", bundle: .module, comment: "menu label that hands the current page URL to the system's default browser — the escape hatch for sites that don't render correctly in this WebView")
-                } icon: {
-                    Image("open_in_browser", bundle: .module)
-                }
-            }
-            .accessibilityIdentifier("menu.openInExternalBrowser")
-            .disabled(currentState?.url == nil)
-
-            // Translate Page — temporarily disabled while we
-            // consider the right customization (provider choice,
-            // target language picker, in-place vs new-tab behavior).
-            // The `translatePageAction` implementation below remains
-            // ready for re-enabling once the design lands.
-            /*
-            Button(action: translatePageAction) {
-                Label {
-                    Text("Translate Page", bundle: .module, comment: "menu label that loads the current page through Google Translate so the user can read foreign-language content in their own language")
-                } icon: {
-                    Image("translate", bundle: .module)
-                }
-            }
-            .accessibilityIdentifier("menu.translatePage")
-            .disabled(currentState?.url == nil)
-            */
 
             Divider()
 
@@ -1702,26 +1753,6 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
 
             Divider()
 
-            Button(action: pageZoomAction) {
-                Label {
-                    Text("Page Zoom", bundle: .module, comment: "page zoom button label")
-                } icon: {
-                    Image("textformat.size", bundle: .module)
-                }
-            }
-            .accessibilityIdentifier("menu.pageZoom")
-
-            Button(action: toggleDesktopSiteAction) {
-                Label {
-                    Text(settings.requestDesktopSite ? "Mobile Site" : "Desktop Site", bundle: .module, comment: "desktop/mobile site toggle")
-                } icon: {
-                    Image(settings.requestDesktopSite ? "smartphone" : "computer", bundle: .module)
-                }
-            }
-            .accessibilityIdentifier("menu.desktopSite")
-
-            Divider()
-
             Button(action: settingsAction) {
                 Label {
                     Text("Settings", bundle: .module, comment: "settings button label")
@@ -1742,6 +1773,15 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
                     .font(.system(size: toolbarIconSize))
             }
         }
+        // Force top-down order so the iOS menu reads the same as
+        // Android. Without this, SwiftUI sees the More button sits
+        // at the bottom of the screen, opens the menu upward, and
+        // reverses items so the "first" sits closest to the
+        // button — which on this toolbar means Home prints last.
+        // `.fixed` keeps Home first regardless of opening direction.
+        #if !SKIP
+        .menuOrder(.fixed)
+        #endif
         .accessibilityIdentifier("button.menu")
     }
 
@@ -2177,7 +2217,7 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
             // tie everything to the same swap point: capture state
             // now, then let the snapshot Task pick up the pixels
             // before the view is torn down.
-            if let pageURL = outgoing.state.url {
+            if let pageURL = outgoing.state.url, pageURL.absoluteString != "about:blank" {
                 outgoing.savedURL = pageURL.absoluteString
             }
             if let pageTitle = outgoing.state.pageTitle, !pageTitle.isEmpty {
@@ -2223,7 +2263,26 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
     }
 
     func logTabs() {
-        logger.info("selected=\(selectedTab) count=\(self.tabs.count)") //  tabs=\(self.tabs.flatMap(\.navigator.webEngine?.webView.url))")
+        logger.info("selected=\(selectedTab) count=\(self.tabs.count)")
+    }
+
+    /// Best-known URL for a tab. Prefers the WKWebView's live
+    /// `state.url`, but falls through to the persisted `savedURL`
+    /// mirror when the live value is `about:blank` (transient
+    /// reset from a backgrounded WebView's KVO) or empty.
+    static func effectiveURL(for tab: BrowserViewModel) -> String {
+        let live = tab.state.url?.absoluteString ?? ""
+        if live.isEmpty || live == "about:blank" {
+            return tab.savedURL
+        }
+        return live
+    }
+
+    /// Best-known title for a tab. Same backgrounded-WebView
+    /// reasoning as `effectiveURL`.
+    static func effectiveTitle(for tab: BrowserViewModel) -> String {
+        let live = tab.state.pageTitle ?? ""
+        return live.isEmpty ? tab.savedTitle : live
     }
 
     func newPrivateTabAction() {
@@ -2274,12 +2333,6 @@ let urlBarBackground = Color(uiColor: UIColor.secondarySystemBackground)
         }
         let favorites = trying(operation: { try store.loadItems(type: .favorite, ids: []) }) ?? []
         isCurrentPageFavorited = favorites.contains(where: { $0.url == url })
-    }
-
-    func showHistoryFavoritesAction() {
-        logger.info("showHistoryFavoritesAction")
-        hapticFeedback()
-        showHistoryFavorites = true
     }
 
     func historyAction() {
