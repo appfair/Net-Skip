@@ -30,6 +30,7 @@ extension BrowserTabView {
     @ViewBuilder func bottomToolbar() -> some View {
         // Five-item bottom toolbar: back, forward, tab list, new tab,
         // "..." more menu. Share lives in the more-menu now.
+        let isPrivateChrome = currentViewModel?.isPrivate == true
         HStack(spacing: 0) {
             backButton()
                 .frame(width: toolbarItemSize, height: toolbarItemSize)
@@ -50,7 +51,20 @@ extension BrowserTabView {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
-        .background(urlBarBackground(for: colorScheme))
+        .background(urlBarBackground(for: colorScheme, isPrivate: isPrivateChrome))
+        // Stable accessibility hook for Maestro: render a 1pt
+        // sentinel overlay carrying `chrome.private` (or `.regular`)
+        // when the chrome's private state changes. Avoids putting
+        // the identifier on the toolbar HStack, which on iOS
+        // shadows the child Button accessibility IDs and breaks
+        // `tapOn: id: button.menu`. Sentinel sits behind the
+        // toolbar at top-leading so it never intercepts taps.
+        .overlay(alignment: .topLeading) {
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityIdentifier(isPrivateChrome ? "chrome.private" : "chrome.regular")
+                .allowsHitTesting(false)
+        }
         // Fixed height when shown; collapses to 0 when the user
         // scrolls down. SwiftUI's natural-sized `nil` height doesn't
         // transpile cleanly to Compose, and `.infinity` greedily eats
@@ -121,18 +135,44 @@ extension BrowserTabView {
         }
     }
 
-    /// Top-level toolbar "new tab" button. Opens a fresh blank tab
-    /// with the URL bar auto-focused (via `shouldFocusURLBar` set
-    /// inside `newTabAction`) so the user can type immediately.
+    /// Top-level toolbar "new tab" button. A short tap opens a fresh
+    /// regular blank tab (the existing behaviour); long-press surfaces
+    /// a small Menu with "New Tab" and "New Private Tab" so power
+    /// users can spawn a private tab without going through the
+    /// More-menu. Same `Menu { ... } primaryAction:` pattern as the
+    /// long-pressable forward button above.
     @ViewBuilder func newTabToolbarButton() -> some View {
-        Button(action: { newTabAction() }) {
+        Menu {
+            Button(action: { newTabAction() }) {
+                Label {
+                    Text("New Tab", bundle: .module, comment: "long-press menu label for opening a new blank regular tab from the toolbar + button")
+                } icon: {
+                    Image("add_2", bundle: .module)
+                }
+            }
+            .accessibilityIdentifier("menu.newTabToolbar.newTab")
+
+            Button(action: { newPrivateTabAction() }) {
+                Label {
+                    Text("New Private Tab", bundle: .module, comment: "long-press menu label for opening a new private (ephemeral) tab from the toolbar + button")
+                } icon: {
+                    Image("lock", bundle: .module)
+                }
+            }
+            .accessibilityIdentifier("menu.newTabToolbar.newPrivateTab")
+        } label: {
             Label {
                 Text("New Tab", bundle: .module, comment: "toolbar button label for opening a new blank tab")
             } icon: {
                 Image("add_2", bundle: .module)
                     .font(.system(size: toolbarIconSize))
             }
+        } primaryAction: {
+            newTabAction()
         }
+        // Match Android's top-down menu order — see the matching
+        // comment on `tabsButton()` above.
+        .menuOrder(.fixed)
         .accessibilityIdentifier("button.newTab")
         .accessibilityLabel(Text("New Tab", bundle: .module, comment: "accessibility label for the toolbar new-tab button"))
     }
@@ -166,6 +206,15 @@ extension BrowserTabView {
                 }
             }
             .accessibilityIdentifier("menu.newTab")
+
+            Button(action: { newPrivateTabAction() }) {
+                Label {
+                    Text("New Private Tab", bundle: .module, comment: "tabs long-press menu label for opening a new private (ephemeral) browser tab")
+                } icon: {
+                    Image("lock", bundle: .module)
+                }
+            }
+            .accessibilityIdentifier("menu.newPrivateTab")
 
             Button(action: duplicateTabAction) {
                 Label {
@@ -262,6 +311,14 @@ extension BrowserTabView {
         } primaryAction: {
             tabListAction()
         }
+        // iOS' default Menu order ("priority") reverses items in
+        // popovers that expand upward from a bottom toolbar, so on
+        // iOS the same code that reads "New Tab → New Private Tab →
+        // Duplicate Tab → …" top-to-bottom on Android would render
+        // "Close All Tabs → Close Other Tabs → … → New Tab" — exact
+        // inverse. `.menuOrder(.fixed)` pins iOS to declaration order
+        // so both platforms agree.
+        .menuOrder(.fixed)
         .accessibilityIdentifier("button.tabs")
     }
 

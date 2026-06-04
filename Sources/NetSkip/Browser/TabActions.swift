@@ -14,8 +14,8 @@ extension BrowserTabView {
     /// reuses an existing blank tab if one is already open, matching
     /// the modern-browser convention that you only get one blank tab
     /// at a time.
-    func newTabAction(url: String? = nil, inBackground: Bool = false) {
-        logger.info("newTabAction url=\(url ?? "nil") inBackground=\(inBackground)")
+    func newTabAction(url: String? = nil, inBackground: Bool = false, isPrivate: Bool = false) {
+        logger.info("newTabAction url=\(url ?? "nil") inBackground=\(inBackground) isPrivate=\(isPrivate)")
         hapticFeedback()
 
         // Snapshot the outgoing tab BEFORE we swap the WebView. On iOS
@@ -36,15 +36,21 @@ extension BrowserTabView {
             if let pageTitle = outgoing.state.pageTitle, !pageTitle.isEmpty {
                 outgoing.savedTitle = pageTitle
             }
-            Task { @MainActor in
-                await outgoing.captureSnapshot()
+            // Same private-tab snapshot guard as in `TabSnapshots`.
+            if !outgoing.isPrivate {
+                Task { @MainActor in
+                    await outgoing.captureSnapshot()
+                }
             }
         }
 
-        // If requesting a blank tab, reuse an existing blank tab
-        // instead of creating another.
-        if url == nil {
+        // If requesting a blank REGULAR tab, reuse an existing blank
+        // regular tab instead of creating another. Private tabs always
+        // get a fresh view-model — reusing one would leak state from
+        // the previous private session into a "new" private tab.
+        if url == nil && !isPrivate {
             for tab in tabs {
+                if tab.isPrivate { continue }
                 if tab.state.url == nil || tab.state.url?.absoluteString == "about:blank" {
                     tab.shouldFocusURLBar = true
                     self.selectedTab = tab.id
@@ -55,7 +61,7 @@ extension BrowserTabView {
         }
 
         let info = PageInfo(url: url)
-        let vm = newViewModel(info)
+        let vm = newViewModel(info, isPrivate: isPrivate)
         // Newly-created blank tabs auto-focus the URL bar so the user
         // can begin typing immediately. URL-having tabs don't, because
         // they have a real page to load.
@@ -95,6 +101,13 @@ extension BrowserTabView {
         // to restore.
         for id in ids {
             if let tab = tabs.first(where: { $0.id == id }) {
+                // Skip private tabs entirely — re-opening a closed
+                // private tab as a regular tab would leak the URL
+                // out of the ephemeral session.
+                if tab.isPrivate {
+                    removeTabSnapshot(tabId: id)
+                    continue
+                }
                 var url = tab.state.url?.absoluteString ?? ""
                 if url.isEmpty {
                     url = tab.savedURL
@@ -116,8 +129,20 @@ extension BrowserTabView {
             removeTabSnapshot(tabId: id)
         }
         withAnimation {
+            // Compute the subset of closing IDs that actually exist
+            // in the persistent store before mutating `tabs` — private
+            // tabs were never written there and their negative
+            // ephemeral IDs must not be sent to `removeItems`.
+            var persistedIDs: Set<PageInfo.ID> = []
+            for id in ids {
+                if let tab = self.tabs.first(where: { $0.id == id }), !tab.isPrivate {
+                    persistedIDs.insert(id)
+                }
+            }
             self.tabs.removeAll(where: { ids.contains($0.id) })
-            try? store.removeItems(type: .active, ids: ids)
+            if !persistedIDs.isEmpty {
+                try? store.removeItems(type: .active, ids: persistedIDs)
+            }
             self.selectedTab = self.tabs.last?.id ?? self.selectedTab
 
             // Always leave behind a single tab.
@@ -240,8 +265,7 @@ extension BrowserTabView {
 
     func newPrivateTabAction() {
         logger.info("newPrivateTabAction")
-        hapticFeedback()
-        // TODO
+        newTabAction(isPrivate: true)
     }
 
     func tabListAction() {

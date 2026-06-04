@@ -21,6 +21,13 @@ extension BrowserTabView {
     }
 
     func captureTabSnapshot(tab: BrowserViewModel) {
+        // Private tabs are never snapshotted. `captureSnapshot()`
+        // writes a PNG of the live WebView to `Caches/tab-snapshots/`,
+        // and we don't want any private-mode pixels reaching disk
+        // — the OS can delete cache files at any time, but they
+        // sit there for the meantime and would be readable to anyone
+        // with file-system access.
+        if tab.isPrivate { return }
         Task { @MainActor in
             await tab.captureSnapshot()
         }
@@ -28,6 +35,7 @@ extension BrowserTabView {
 
     func captureAllTabSnapshots() {
         for tab in tabs {
+            if tab.isPrivate { continue }
             if tab.state.url != nil {
                 captureTabSnapshot(tab: tab)
             }

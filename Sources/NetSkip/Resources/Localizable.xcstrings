@@ -6663,6 +6663,9 @@
         }
       }
     },
+    "New Private Tab" : {
+      "comment" : "menu label for opening a new private (ephemeral) browser tab"
+    },
     "New Tab" : {
       "comment" : "accessibility label for the new-tab toolbar button in the tab overview\naccessibility label for the toolbar new-tab button\nnew tab button label\ntoolbar button label for opening a new blank tab",
       "localizations" : {
@@ -8293,6 +8296,9 @@
           }
         }
       }
+    },
+    "Private Browsing" : {
+      "comment" : "URL bar placeholder for an empty private tab"
     },
     "Prompt for File Downloads" : {
       "comment" : "settings toggle label for confirming each download before it starts",

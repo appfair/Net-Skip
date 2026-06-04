@@ -18,6 +18,19 @@ public struct ContentView: View {
             contentBlockers: makeContentBlockerConfiguration(provider: ContentView.adBlockProvider)
         )
     }()
+
+    /// Shared configuration for every private tab. `profile: .ephemeral`
+    /// hands each web view a fresh `WKWebsiteDataStore.nonPersistent()`
+    /// on iOS (or an in-memory Android WebView profile when supported),
+    /// so cookies / local storage / cache set during private browsing
+    /// never touch disk and never bleed into the regular session.
+    let privateConfig: WebEngineConfiguration = {
+        return WebEngineConfiguration(
+            javaScriptEnabled: true,
+            profile: .ephemeral,
+            contentBlockers: makeContentBlockerConfiguration(provider: ContentView.adBlockProvider)
+        )
+    }()
     #endif
     let store = try! SQLBrowserStore(url: URL.documentsDirectory.appendingPathComponent("netskip.sqlite"))
 
@@ -28,7 +41,7 @@ public struct ContentView: View {
 
     public var body: some View {
         #if SKIP || os(iOS)
-        BrowserTabView(configuration: config, store: store)
+        BrowserTabView(configuration: config, privateConfiguration: privateConfig, store: store)
             .environment(settings)
         #else
         Text("Browser requires iOS")

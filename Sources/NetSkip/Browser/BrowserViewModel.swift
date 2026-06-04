@@ -43,11 +43,21 @@ import NetSkipModel
     /// leaks across navigations.
     var inReaderMode: Bool = false
 
-    public init(id: PageInfo.ID, navigator: WebViewNavigator, configuration: WebEngineConfiguration, store: WebBrowserStore) {
+    /// True for tabs created via "New Private Tab". A private tab is
+    /// backed by a `WebProfile.ephemeral` configuration (so cookies /
+    /// local storage live in an in-memory `WKWebsiteDataStore` /
+    /// Android profile), its page loads are NOT recorded in the
+    /// history table, and it is NOT persisted across launches.
+    /// Immutable for the tab's lifetime — flipping the flag would
+    /// leave the wrong underlying data store attached to the WebView.
+    public let isPrivate: Bool
+
+    public init(id: PageInfo.ID, navigator: WebViewNavigator, configuration: WebEngineConfiguration, store: WebBrowserStore, isPrivate: Bool = false) {
         self.id = id
         self.navigator = navigator
         self.configuration = configuration
         self.store = store
+        self.isPrivate = isPrivate
     }
 
     /// PNG path on disk where this tab's grid-overview snapshot lives.

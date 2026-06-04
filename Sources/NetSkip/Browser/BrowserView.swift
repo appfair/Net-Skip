@@ -85,6 +85,11 @@ extension PageInfo {
             ZStack {
                 WebView(configuration: configuration, navigator: viewModel.navigator, state: $viewModel.state, onNavigationCommitted: {
                     logger.log("onNavigationCommitted")
+                    // Re-apply the user's text-zoom preference on every
+                    // navigation — on iOS we inject CSS into the loaded
+                    // DOM, so a fresh page starts at the default size
+                    // until we re-apply the user's setting.
+                    self.applyTextZoom()
                 }, onDownloadRequested: { request in
                     logger.log("download requested: \(String(describing: request.url))")
                     Task { @MainActor in
@@ -164,8 +169,11 @@ extension PageInfo {
             // tab that's been sitting idle would otherwise lose its
             // snapshot if the page hadn't quite finished painting when
             // the title arrived.
-            Task { @MainActor in
-                await viewModel.captureSnapshot()
+            // Skip private tabs — see `TabSnapshots`.
+            if !viewModel.isPrivate {
+                Task { @MainActor in
+                    await viewModel.captureSnapshot()
+                }
             }
         }
         .onChange(of: settings.enableJavaScript, initial: false, { _, _ in self.updateWebView() })
@@ -232,7 +240,12 @@ extension PageInfo {
             // in a new tab" regression.
             if !blank {
                 viewModel.savedURL = urlString
-                if var pageInfo = trying(operation: { try store.loadItems(type: .active, ids: [viewModel.id]) })?.first {
+                // Private tabs are never written to the `active`
+                // store. The `loadItems` lookup below would already
+                // return nothing for an ephemeral tab ID, but the
+                // explicit guard makes the intent — and the absence
+                // of a disk write here — obvious.
+                if !viewModel.isPrivate, var pageInfo = trying(operation: { try store.loadItems(type: .active, ids: [viewModel.id]) })?.first {
                     pageInfo.url = urlString
                     _ = trying { try store.saveItems(type: .active, items: [pageInfo]) }
                 }
@@ -261,7 +274,8 @@ extension PageInfo {
             // tab's saved title.
             viewModel.savedTitle = newTitle
             addPageToHistory()
-            if var pageInfo = trying(operation: { try store.loadItems(type: .active, ids: [viewModel.id]) })?.first {
+            // Same private-tab guard as in `updatePageURL`.
+            if !viewModel.isPrivate, var pageInfo = trying(operation: { try store.loadItems(type: .active, ids: [viewModel.id]) })?.first {
                 pageInfo.title = newTitle
                 _ = trying {
                     try store.saveItems(type: .active, items: [pageInfo])
@@ -283,8 +297,11 @@ extension PageInfo {
             // landed, paint in progress" capture is preferable to no
             // capture at all — and `captureAllTabSnapshots` on tab-grid
             // open will re-snapshot whatever is still active.
-            Task { @MainActor in
-                await viewModel.captureSnapshot()
+            // Skip private tabs — see `TabSnapshots`.
+            if !viewModel.isPrivate {
+                Task { @MainActor in
+                    await viewModel.captureSnapshot()
+                }
             }
             // Once the title is in we can also try to extract a
             // higher-quality favicon URL from the page's own
@@ -321,17 +338,30 @@ extension PageInfo {
     }
 
     private func applyTextZoom() {
+        let pct = Int((settings.textZoom * 100.0).rounded())
         #if !SKIP
-        // iOS: WKWebView.pageZoom on iOS scales the viewport rather than the content,
-        // so values > 1.0 make content appear smaller. Use the reciprocal to get
-        // the expected behavior where textZoom > 1.0 means "zoom in" (larger text).
+        // iOS: `WKWebView.pageZoom` exists but scales the entire viewport
+        // and does NOT reflow paragraphs — which feels nothing like the
+        // Android `WebView.settings.textZoom` text-only zoom users expect.
+        // Match Android's behaviour by setting `-webkit-text-size-adjust`
+        // on the document root: WebKit treats that as a text-size-scaling
+        // hint and reflows the layout to match. The page must reset
+        // `pageZoom` to 1.0 in case a previous version of this code set it.
+        guard let engine = viewModel.navigator.webEngine else { return }
         if let webView = self.webView {
-            webView.pageZoom = 1.0 / settings.textZoom
+            webView.pageZoom = 1.0
+        }
+        Task { @MainActor in
+            // `important` is required because many pages already set
+            // `-webkit-text-size-adjust: 100%` (or similar) inline on
+            // <html>; without `!important` ours would be overridden.
+            let js = "document.documentElement.style.setProperty('-webkit-text-size-adjust', '\(pct)%', 'important'); 'OK'"
+            _ = try? await engine.evaluate(js: js)
         }
         #else
-        // Android: use the native WebView settings.textZoom (integer percentage)
+        // Android: native WebView setting takes an integer percentage and
+        // reflows the layout automatically.
         if let webView = self.webView {
-            let pct = Int(settings.textZoom * 100.0)
             webView.getSettings().setTextZoom(pct)
         }
         #endif
@@ -350,7 +380,7 @@ extension PageInfo {
             }
             urlBarComponentView()
         }
-        .background(showBottomBar ? urlBarBackground(for: colorScheme) : Color.clear)
+        .background(showBottomBar ? urlBarBackground(for: colorScheme, isPrivate: viewModel.isPrivate) : Color.clear)
             #if !SKIP
             .onChange(of: state.url, updatePageURL)
             .onChange(of: state.pageTitle, updatePageTitle)
@@ -379,13 +409,20 @@ extension PageInfo {
     /// The URL bar TextField. The Skip variant binds `selection` so we can
     /// programmatically select-all-on-focus to mirror iOS UITextField behavior.
     @ViewBuilder func urlTextFieldView() -> some View {
+        // Private tabs swap the placeholder so the user sees the
+        // mode at all times — including while the URL bar is the
+        // focused element (when our unfocused-state private overlay
+        // is hidden).
+        let placeholder = isURLBarFocused
+            ? (viewModel.isPrivate ? "Private Browsing" : "Search or enter website name")
+            : ""
         #if SKIP
         TextField(text: $viewModel.urlTextField, selection: $urlSelection) {
-            Text(isURLBarFocused ? "Search or enter website name" : "")
+            Text(placeholder)
         }
         #else
         TextField(text: $viewModel.urlTextField) {
-            Text(isURLBarFocused ? "Search or enter website name" : "")
+            Text(placeholder)
         }
         #endif
     }
@@ -400,7 +437,7 @@ extension PageInfo {
             // background — DuckDuckGo / Safari-style.
             ZStack(alignment: .bottom) {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(showBottomBar ? urlBarPillFill(for: colorScheme) : .clear)
+                    .fill(showBottomBar ? urlBarPillFill(for: colorScheme, isPrivate: viewModel.isPrivate) : .clear)
                     // Drop-shadow only carries the white pill off
                     // the chrome in light mode; in dark mode the
                     // chrome and pill are already two shades of
@@ -434,12 +471,17 @@ extension PageInfo {
                 .textFieldStyle(.plain)
                 // ~30% larger text inside the URL bar — 16/15 → 21/20
                 .font(.system(size: isURLBarFocused ? 21.0 : 20.0))
-                .foregroundStyle(isURLBarFocused ? Color.primary : Color.clear)
+                .foregroundStyle(isURLBarFocused ? urlBarForeground(for: colorScheme, isPrivate: viewModel.isPrivate) : Color.clear)
                 .accessibilityIdentifier("field.url")
                 #if !SKIP
                 #if os(iOS)
                 .keyboardType(.webSearch)
-                .textContentType(.URL)
+                // Private tabs use `.none` so the system keyboard's
+                // autocomplete won't surface previously-entered URLs
+                // — a `textContentType(.URL)` field shares its
+                // autofill state with every other URL field in the
+                // app and, on iOS, with Safari's URL history.
+                .textContentType(viewModel.isPrivate ? .none : .URL)
                 .autocorrectionDisabled(true)
                 .textInputAutocapitalization(.never)
                 .multilineTextAlignment(isURLBarFocused ? .leading : .center)
@@ -558,7 +600,24 @@ extension PageInfo {
                     return false
                 }()
                 HStack(spacing: 4) {
+                    // Private tabs use the deep-indigo pill, so the
+                    // domain / placeholder need a light foreground;
+                    // `urlBarForeground` returns white for private,
+                    // `Color.primary` for the default chrome.
+                    let foreground = urlBarForeground(for: colorScheme, isPrivate: viewModel.isPrivate)
                     if hasRealURL, let pageURL = state.url {
+                        // Small "incognito" mask icon prefixes the
+                        // domain in private mode — DuckDuckGo /
+                        // Firefox use the same convention and it
+                        // makes the privacy state legible even when
+                        // the user has the chrome theme set very
+                        // dark and the indigo tint reads as "black".
+                        if viewModel.isPrivate {
+                            Image("lock", bundle: .module)
+                                .font(.system(size: 16))
+                                .foregroundStyle(foreground)
+                                .accessibilityIdentifier("indicator.private")
+                        }
                         // Show the destination domain even while the
                         // page is still loading — the URL bar's
                         // bottom-edge progress bar conveys "loading",
@@ -568,12 +627,22 @@ extension PageInfo {
                         // all surface the URL throughout the load.
                         Text(domainFromURL(pageURL.absoluteString))
                             .font(.system(size: 20))
-                            .foregroundStyle(state.isLoading ? Color.secondary : Color.primary)
+                            .foregroundStyle(state.isLoading ? Color.secondary : foreground)
                             .lineLimit(1)
                     } else {
-                        Text("Search or enter website name", bundle: .module, comment: "placeholder string for URL bar")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.secondary)
+                        if viewModel.isPrivate {
+                            Image("lock", bundle: .module)
+                                .font(.system(size: 16))
+                                .foregroundStyle(foreground)
+                                .accessibilityIdentifier("indicator.private")
+                            Text("Private Browsing", bundle: .module, comment: "URL bar placeholder for an empty private tab")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundStyle(foreground)
+                        } else {
+                            Text("Search or enter website name", bundle: .module, comment: "placeholder string for URL bar")
+                                .font(.system(size: 20))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 .allowsHitTesting(false)
@@ -725,6 +794,10 @@ extension PageInfo {
             // a search suggestion, and saves a roundtrip through the
             // search engine for sites the user has been to before.
             let historyMatches: [PageInfo] = {
+                // Private browsing — don't surface history matches.
+                // Even a search-typed-as-URL would leak past visits
+                // into the autocomplete dropdown.
+                if viewModel.isPrivate { return [] }
                 guard !typed.isEmpty else { return [] }
                 let query = typed.lowercased()
                 let all = trying(operation: {
@@ -819,9 +892,12 @@ extension PageInfo {
                 // Chrome "Most Visited" style. Falls back to the
                 // bare magnifying-glass prompt when history is empty
                 // (i.e. genuinely fresh app install).
-                let recent = trying(operation: {
+                // Private tabs intentionally show the bare-prompt
+                // empty state — no Recent history, no shortcuts that
+                // would leak past activity into the private session.
+                let recent: [PageInfo] = viewModel.isPrivate ? [] : (trying(operation: {
                     try store.loadItems(type: .history, ids: [])
-                }) ?? []
+                }) ?? [])
                 let top = Array(recent.prefix(6))
                 if top.isEmpty {
                     Spacer()
@@ -1022,6 +1098,12 @@ extension PageInfo {
     }
 
     func addPageToHistory() {
+        // Private browsing — explicitly skip the history write. The
+        // tab's WebView still navigates and the title still updates,
+        // but the URL never touches the persistent history table.
+        if viewModel.isPrivate {
+            return
+        }
         if let pageURL = state.url, let title = state.pageTitle {
             let url = pageURL.absoluteString
             // Don't pollute history with internal placeholder URLs.

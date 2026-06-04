@@ -348,8 +348,11 @@ extension BrowserTabView {
                 if let pageTitle = outgoing.state.pageTitle, !pageTitle.isEmpty {
                     outgoing.savedTitle = pageTitle
                 }
-                Task { @MainActor in
-                    await outgoing.captureSnapshot()
+                // Skip snapshotting private tabs — see TabSnapshots.
+                if !outgoing.isPrivate {
+                    Task { @MainActor in
+                        await outgoing.captureSnapshot()
+                    }
                 }
             }
             withAnimation {
@@ -361,13 +364,19 @@ extension BrowserTabView {
                 // Title bar — sized up so the title text is readable at
                 // a glance and the close button is a fingertip target.
                 HStack(spacing: 6) {
+                    if tab.isPrivate {
+                        Image("lock", bundle: .module)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color.white)
+                            .accessibilityIdentifier("indicator.tab.private")
+                    }
                     if tab.isPinned {
                         Image("push_pin", bundle: .module)
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(Color.white)
                             .accessibilityIdentifier("indicator.tab.pinned")
                     }
-                    Text(title.isEmpty ? (domain.isEmpty ? "New Tab" : domain) : title)
+                    Text(title.isEmpty ? (domain.isEmpty ? (tab.isPrivate ? "Private Tab" : "New Tab") : domain) : title)
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(Color.white)
                         .lineLimit(1)
@@ -384,9 +393,14 @@ extension BrowserTabView {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 4)
                 .background(
-                    isActive
-                        ? Color.accentColor
-                        : (domain.isEmpty ? Color(white: 0.28) : domainAvatarColor(for: domain).opacity(0.85))
+                    // Private tabs ALWAYS get the indigo header,
+                    // even when not selected — so they're obvious
+                    // in the grid regardless of where the focus is.
+                    tab.isPrivate
+                        ? Color(red: 0.21, green: 0.16, blue: 0.36)
+                        : (isActive
+                            ? Color.accentColor
+                            : (domain.isEmpty ? Color(white: 0.28) : domainAvatarColor(for: domain).opacity(0.85)))
                 )
 
                 // Snapshot preview area

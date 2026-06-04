@@ -77,14 +77,36 @@ extension BrowserTabView {
         }
     }
 
-    func newViewModel(_ pageInfo: PageInfo) -> BrowserViewModel {
-        let newID = (try? store.saveItems(type: .active, items: [pageInfo]).first) ?? PageInfo.ID(0)
+    func newViewModel(_ pageInfo: PageInfo, isPrivate: Bool = false) -> BrowserViewModel {
+        // Private tabs are NEVER written to the `active` store — that
+        // would leak the visited URL onto disk via the next restore.
+        // Fall back to a fresh ephemeral ID drawn from the same source
+        // the store would have used, so private tab IDs still don't
+        // collide with regular tabs in the live `tabs` array.
+        let newID: PageInfo.ID
+        if isPrivate {
+            newID = Self.nextEphemeralTabID()
+        } else {
+            newID = (try? store.saveItems(type: .active, items: [pageInfo]).first) ?? PageInfo.ID(0)
+        }
         let newURL = URL(string: pageInfo.url ?? fallbackURL)
-        let vm = BrowserViewModel(id: newID, navigator: WebViewNavigator(initialURL: newURL), configuration: configuration, store: store)
+        let cfg = isPrivate ? privateConfiguration : configuration
+        let vm = BrowserViewModel(id: newID, navigator: WebViewNavigator(initialURL: newURL), configuration: cfg, store: store, isPrivate: isPrivate)
         vm.savedTitle = pageInfo.title ?? ""
         vm.savedURL = pageInfo.url ?? ""
         vm.isPinned = pageInfo.pinned
         return vm
+    }
+
+    /// Monotonically increasing counter used for private-tab IDs.
+    /// Starts from a very large negative value so it can never collide
+    /// with the SQLite AUTOINCREMENT IDs the regular `active` store
+    /// hands out (SQLite IDs are non-negative). Process-local — private
+    /// tab IDs aren't persistent and don't need to.
+    nonisolated(unsafe) private static var ephemeralTabIDCounter: PageInfo.ID = PageInfo.ID.min
+    private static func nextEphemeralTabID() -> PageInfo.ID {
+        ephemeralTabIDCounter += 1
+        return ephemeralTabIDCounter
     }
 
     func logTabs() {

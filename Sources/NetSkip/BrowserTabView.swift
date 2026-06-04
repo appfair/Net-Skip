@@ -30,6 +30,10 @@ import NetSkipMiniApp
 /// - `HistoryFavoritesSheets.swift` — history & favorites browsers.
 @MainActor public struct BrowserTabView : View {
     let configuration: WebEngineConfiguration
+    /// Configuration handed to every private tab. Distinct from
+    /// `configuration` because private tabs need `WebProfile.ephemeral`
+    /// so the WebView's data store stays in-memory.
+    let privateConfiguration: WebEngineConfiguration
     let store: WebBrowserStore
 
     @State var tabs: [BrowserViewModel] = []
@@ -112,8 +116,9 @@ import NetSkipMiniApp
     /// and the `currentURL`-change handler.
     @State var isCurrentPageInReaderMode: Bool = false
 
-    public init(configuration: WebEngineConfiguration, store: WebBrowserStore) {
+    public init(configuration: WebEngineConfiguration, privateConfiguration: WebEngineConfiguration, store: WebBrowserStore) {
         self.configuration = configuration
+        self.privateConfiguration = privateConfiguration
         self.store = store
         // Install link context menu actions on the configuration the
         // moment we have a reference to it. `.onAppear` was firing
@@ -123,6 +128,7 @@ import NetSkipMiniApp
         // `WKUIDelegate.contextMenuConfigurationForElement` hit the
         // nil branch and fell through to WKWebView's default menu.
         Self.installLinkContextMenuActions(on: configuration, store: store)
+        Self.installLinkContextMenuActions(on: privateConfiguration, store: store)
     }
 
     public var body: some View {
@@ -239,8 +245,13 @@ import NetSkipMiniApp
     func browserTabView() -> some View {
         TabView(selection: $selectedTab) {
             ForEach($tabs) { tab in
+                // Each tab carries its own `configuration` on the
+                // view-model — private tabs use the ephemeral one.
+                // We pass that through rather than the outer
+                // `configuration` so a private tab's WebView is
+                // wired to its non-persistent data store.
                 BrowserView(
-                    configuration: configuration,
+                    configuration: tab.wrappedValue.configuration,
                     store: store,
                     submitURL: { self.submitURL(text: $0) },
                     findOnPageAction: { self.findOnPageAction() },
@@ -276,11 +287,21 @@ import NetSkipMiniApp
         }
         .onChange(of: selectedTab) { oldTab, newTab in
             if let oldVM = tabs.first(where: { $0.id == oldTab }) {
-                if oldVM.state.url != nil {
+                if oldVM.state.url != nil && !oldVM.isPrivate {
+                    // Don't snapshot private tabs — the PNG lives in
+                    // Caches but it would still be a privacy leak
+                    // sitting on disk until the OS evicts it.
                     captureTabSnapshot(tab: oldVM)
                 }
             }
             self.showBottomBar = true
+            // Don't record private tabs as "the last selected tab" —
+            // they're gone after relaunch and writing their ID would
+            // (harmlessly, but visibly) leak the count of private tabs
+            // through `@AppStorage("selectedTabState")`.
+            if let newVM = tabs.first(where: { $0.id == newTab }), newVM.isPrivate {
+                return
+            }
             self.selectedTabState = newTab.description
         }
         .onAppear {
