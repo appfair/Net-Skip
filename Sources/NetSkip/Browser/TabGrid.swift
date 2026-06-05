@@ -355,10 +355,19 @@ extension BrowserTabView {
                     }
                 }
             }
-            withAnimation {
+            // Switch tabs without the PageTabViewStyle horizontal slide.
+            // The slide animation across N tabs can drag in offscreen
+            // BrowserViews and feel janky; the user already saw the
+            // tab grid and chose where they're going, so a snap-cut is
+            // both faster and visually cleaner. The sheet dismissal
+            // below animates on its own via SwiftUI's sheet machinery
+            // and doesn't need `withAnimation`.
+            var noSlide = Transaction()
+            noSlide.disablesAnimations = true
+            withTransaction(noSlide) {
                 self.selectedTab = tab.id
-                self.presentedSheet = nil
             }
+            self.presentedSheet = nil
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 // Title bar — sized up so the title text is readable at

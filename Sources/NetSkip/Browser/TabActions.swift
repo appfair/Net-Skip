@@ -48,10 +48,23 @@ extension BrowserTabView {
         // regular tab instead of creating another. Private tabs always
         // get a fresh view-model — reusing one would leak state from
         // the previous private session into a "new" private tab.
+        //
+        // Truly-blank means BOTH the live WebView state AND the
+        // savedURL mirror are empty/about:blank. iOS WKWebView fires
+        // a transient `about:blank` KVO when a backgrounded tab's
+        // engine is torn down, so reading `state.url` alone would
+        // misclassify a real loaded background tab as "blank" — and
+        // then reuse it, clobbering its content with the user's
+        // next-typed URL. (Reproduces with the qa-tab-count flow:
+        // open tab A → load X → background it → open new tab → the
+        // dedup loop "found" A as blank and the next navigation
+        // overwrote X.)
         if url == nil && !isPrivate {
             for tab in tabs {
                 if tab.isPrivate { continue }
-                if tab.state.url == nil || tab.state.url?.absoluteString == "about:blank" {
+                let liveBlank = tab.state.url == nil || tab.state.url?.absoluteString == "about:blank"
+                let savedBlank = tab.savedURL.isEmpty || tab.savedURL == "about:blank"
+                if liveBlank && savedBlank {
                     tab.shouldFocusURLBar = true
                     self.selectedTab = tab.id
                     logTabs()

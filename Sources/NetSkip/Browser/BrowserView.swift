@@ -30,6 +30,7 @@ extension PageInfo {
     let isFavorited: () -> Bool
     let copyURLAction: () -> Void
     let openInExternalBrowserAction: () -> Void
+    let translatePageAction: () -> Void
     let pageZoomAction: () -> Void
     let toggleDesktopSiteAction: () -> Void
     let toggleReaderModeAction: () -> Void
@@ -104,6 +105,18 @@ extension PageInfo {
                 let showSuggestions = state.url == nil || isURLBarFocused
                 if showSuggestions {
                     suggestionsView()
+                        .frame(maxHeight: .infinity)
+                }
+                // Inline error overlay. When `state.error` is set
+                // (after a failed navigation — e.g. DNS lookup
+                // failure, TLS error, network unreachable), we
+                // would otherwise show a blank WebView and let the
+                // user wonder whether anything happened. The
+                // overlay sits above the WebView while the
+                // suggestions / chrome stay responsive so the user
+                // can retry or type a different URL.
+                if let error = state.error, !isURLBarFocused {
+                    navigationErrorView(error: error)
                         .frame(maxHeight: .infinity)
                 }
             }
@@ -240,6 +253,16 @@ extension PageInfo {
             // in a new tab" regression.
             if !blank {
                 viewModel.savedURL = urlString
+                // Keep the navigator's `initialURL` current so when iOS
+                // `PageTabViewStyle` dismantles this tab's WKWebView and
+                // re-instantiates a fresh one on return, skip-web's
+                // `webEngine.didSet` restores to where the user actually
+                // was, not the URL the navigator was constructed with
+                // (typically `about:blank` for "New Tab"). The restore
+                // happens inside skip-web on the same runloop tick the
+                // new engine is attached, so no deferred reload is
+                // needed on this side.
+                viewModel.navigator.initialURL = newURL
                 // Private tabs are never written to the `active`
                 // store. The `loadItems` lookup below would already
                 // return nothing for an ephemeral tab ID, but the
@@ -739,6 +762,62 @@ extension PageInfo {
         }
     }
 
+    /// Inline error UI shown when the WebView's navigation fails
+    /// (DNS NXDOMAIN, network unreachable, TLS handshake failure,
+    /// etc.). Surfaced by the WebView ZStack overlay above. Mirrors
+    /// the iOS Safari error-page convention — friendly headline +
+    /// the system error message + a Try Again button that retries
+    /// the typed URL.
+    @ViewBuilder func navigationErrorView(error: Error) -> some View {
+        let typedURL = viewModel.urlTextField
+        let attempted: String = {
+            if !typedURL.isEmpty { return typedURL }
+            return viewModel.savedURL
+        }()
+        VStack(spacing: 16) {
+            Spacer()
+            Image("captive_portal", bundle: .module)
+                .font(.system(size: 56))
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("view.navigationError")
+            Text("Couldn't open page", bundle: .module, comment: "navigation-error overlay title shown when a page fails to load")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .multilineTextAlignment(.center)
+            if !attempted.isEmpty {
+                Text(verbatim: attempted)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    #if !SKIP
+                    .truncationMode(.middle)
+                    #endif
+                    .padding(.horizontal, 24)
+            }
+            Text(verbatim: error.localizedDescription)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+            if !attempted.isEmpty {
+                Button {
+                    self.submitURL(attempted)
+                } label: {
+                    Text("Try Again", bundle: .module, comment: "navigation-error overlay retry button")
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 10)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("button.navigationError.retry")
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(white: 0.98).opacity(colorScheme == .dark ? 0.05 : 1.0))
+    }
+
     @ViewBuilder func suggestionsView() -> some View {
         VStack(spacing: 0) {
             // Top bar with Cancel — only show when the URL bar is actually focused,
@@ -1043,6 +1122,16 @@ extension PageInfo {
             }
         }
         .accessibilityIdentifier("menu.openInExternalBrowser")
+        .disabled(state.url == nil)
+
+        Button(action: translatePageAction) {
+            Label {
+                Text("Translate Page", bundle: .module, comment: "favicon menu: hand the current page URL to Google Translate's public site-translation endpoint")
+            } icon: {
+                Image("translate", bundle: .module)
+            }
+        }
+        .accessibilityIdentifier("menu.translatePage")
         .disabled(state.url == nil)
 
         Divider()

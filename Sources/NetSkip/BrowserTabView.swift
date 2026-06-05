@@ -259,6 +259,7 @@ import NetSkipMiniApp
                     isFavorited: { self.isCurrentPageFavorited },
                     copyURLAction: { self.copyURLAction() },
                     openInExternalBrowserAction: { self.openInExternalBrowserAction() },
+                    translatePageAction: { self.translatePageAction() },
                     pageZoomAction: { self.pageZoomAction() },
                     toggleDesktopSiteAction: { self.toggleDesktopSiteAction() },
                     toggleReaderModeAction: { self.toggleReaderModeAction() },
