@@ -26,12 +26,12 @@ final class NetSkipModelTests: XCTestCase {
         let ctx = SQLContext(configuration: .platform) // in-memory context
         let store = try NetSkipWebBrowserStore(url: nil)
 
-        XCTAssertEqual(0, try store.loadItems(type: .history, ids: []).count)
+        XCTAssertEqual(0, try store.loadItems(type: PageInfo.PageType.history, ids: []).count)
 
         let url = "https://www.example.org"
         let info = PageInfo(url: url)
-        try store.saveItems(type: .history, items: [info])
-        var info2 = try XCTUnwrap(store.loadItems(type: .history, ids: []).first)
+        try store.saveItems(type: PageInfo.PageType.history, items: [info])
+        var info2 = try XCTUnwrap(store.loadItems(type: PageInfo.PageType.history, ids: []).first)
 
         let id = info2.id
         XCTAssertEqual(Int64(1), id)
@@ -39,22 +39,22 @@ final class NetSkipModelTests: XCTestCase {
         XCTAssertEqual(nil, info2.title)
 
         info2.title = "ABC"
-        try store.saveItems(type: .history, items: [info2])
-        XCTAssertEqual(1, try store.loadItems(type: .history, ids: []).count, "saving existing item should update row")
+        try store.saveItems(type: PageInfo.PageType.history, items: [info2])
+        XCTAssertEqual(1, try store.loadItems(type: PageInfo.PageType.history, ids: []).count, "saving existing item should update row")
 
-        let info3 = try XCTUnwrap(store.loadItems(type: .history, ids: [id]).first)
+        let info3 = try XCTUnwrap(store.loadItems(type: PageInfo.PageType.history, ids: [id]).first)
         XCTAssertEqual("ABC", info3.title)
 
         // re-saving an item with id=0 should make new records
-        try store.saveItems(type: .history, items: [info])
-        try store.saveItems(type: .history, items: [info, info])
-        XCTAssertEqual(4, try store.loadItems(type: .history, ids: []).count, "saving new items should make new rows")
+        try store.saveItems(type: PageInfo.PageType.history, items: [info])
+        try store.saveItems(type: PageInfo.PageType.history, items: [info, info])
+        XCTAssertEqual(4, try store.loadItems(type: PageInfo.PageType.history, ids: []).count, "saving new items should make new rows")
 
-        try store.removeItems(type: .history, ids: [id])
-        XCTAssertEqual(3, try store.loadItems(type: .history, ids: []).count, "removing single item should remove it from store")
+        try store.removeItems(type: PageInfo.PageType.history, ids: [id])
+        XCTAssertEqual(3, try store.loadItems(type: PageInfo.PageType.history, ids: []).count, "removing single item should remove it from store")
 
-        try store.removeItems(type: .history, ids: [])
-        XCTAssertEqual(0, try store.loadItems(type: .history, ids: []).count, "removing empty id list should clear table")
+        try store.removeItems(type: PageInfo.PageType.history, ids: [])
+        XCTAssertEqual(0, try store.loadItems(type: PageInfo.PageType.history, ids: []).count, "removing empty id list should clear table")
 
     }
     #endif

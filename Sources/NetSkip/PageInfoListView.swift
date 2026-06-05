@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import SwiftUI
-import SkipWeb
 import NetSkipModel
 
+#if SKIP || os(iOS)
+import SkipWeb
 
 struct PageInfoListView<ToolbarItems : ToolbarContent> : View {
     let type: PageInfo.PageType
@@ -360,3 +361,5 @@ extension PageInfo.PageType {
         }
     }
 }
+
+#endif

@@ -93,6 +93,16 @@ extension BrowserTabView {
     }
 
     func fieldToURL(_ string: String) -> URL? {
+        Self.fieldToURL(string)
+    }
+
+    /// Classify the URL-bar text as either a URL to navigate or
+    /// (returning `nil`) a search query. The heuristic is intentionally
+    /// permissive: scheme prefixes are accepted as-is; bare hosts with
+    /// a dot get `https://` prepended; anything with spaces is treated
+    /// as a search term. Static so it's directly testable without an
+    /// enclosing `BrowserTabView`.
+    static func fieldToURL(_ string: String) -> URL? {
         if string.hasPrefix("https://")
             || string.hasPrefix("http://")
             || string.hasPrefix("file://") {

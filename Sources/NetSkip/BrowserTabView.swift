@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import SwiftUI
-#if !SKIP
+#if !SKIP && canImport(UIKit)
 import UIKit
 #endif
 import SkipWeb

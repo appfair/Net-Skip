@@ -24,7 +24,7 @@
 import Foundation
 import SwiftUI
 import SkipWeb
-#if !SKIP
+#if !SKIP && canImport(UIKit)
 import UIKit
 #endif
 
@@ -547,7 +547,7 @@ func openDownloadedFile(_ item: DownloadItem) {
     } catch {
         logger.log("Failed to open downloaded file: \(error)")
     }
-    #else
+    #elseif os(iOS)
     // iOS: use a UIDocumentInteractionController-backed UIActivityViewController.
     // This lets the user share or open the file in any registered handler.
     guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,

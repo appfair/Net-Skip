@@ -9,7 +9,7 @@
 // etc.) that nearly every action reads through.
 
 import SwiftUI
-#if !SKIP
+#if !SKIP && canImport(UIKit)
 import UIKit
 #endif
 import SkipWeb

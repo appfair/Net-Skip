@@ -5,7 +5,7 @@
 // glyph aspect ratios don't render at visually different sizes.
 
 import SwiftUI
-#if !SKIP
+#if !SKIP && canImport(UIKit)
 import UIKit
 #endif
 import SkipWeb

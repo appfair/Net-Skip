@@ -5,7 +5,7 @@
 // view is the cross-platform fallback (always used on Android).
 
 import SwiftUI
-#if !SKIP
+#if !SKIP && canImport(UIKit)
 import UIKit
 #endif
 
