@@ -109,6 +109,35 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!--
+                Web-handler intent filter. Declaring ACTION_VIEW for
+                http and https with the BROWSABLE category (and NO
+                android:host) is what makes Net-Skip eligible for the
+                system browser role; with a host this would degrade
+                into a per-domain app link. Required by the AOSP
+                BROWSER role contract — without it RoleManager
+                considers the app ineligible and returns RESULT_CANCELED
+                from `createRequestRoleIntent`.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="http"/>
+                <data android:scheme="https"/>
+            </intent-filter>
+
+            <!--
+                Receive URLs shared from other apps (Share sheet →
+                "Net Skip"). The default Android browsers all accept
+                text/plain SEND.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
+            </intent-filter>
         </activity>
 
         <!--

@@ -273,11 +273,16 @@ import NetSkipMiniApp
         #if !SKIP
         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
         .indexViewStyle(PageIndexViewStyle(backgroundDisplayMode: .automatic))
+        .sensoryFeedback(.impact, trigger: triggerImpact)
+        #endif
+        // External URL intents — iOS universal links and Android
+        // ACTION_VIEW http(s) intents both flow through skip-ui's
+        // `.onOpenURL`. Required for the browser to act as a real
+        // system browser on Android (the role contract demands the
+        // app actually handle the intent it filters for).
         .onOpenURL { url in
             openURL(url: url.absoluteString, newTab: true)
         }
-        .sensoryFeedback(.impact, trigger: triggerImpact)
-        #endif
         .onChange(of: currentState?.scrollingDown) {
             let scrollingDown = currentState?.scrollingDown == false
             if self.showBottomBar != scrollingDown {

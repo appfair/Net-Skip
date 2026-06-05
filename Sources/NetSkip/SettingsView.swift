@@ -20,7 +20,16 @@ struct SettingsView : View {
     @State var confirmClearCache: Bool = false
     @State var confirmClearAll: Bool = false
 
+    /// Re-snapshot the default-browser status whenever the Settings
+    /// sheet (re)renders. On Android, coming back from the
+    /// `RoleManager` picker flips `isRoleHeld` immediately and the
+    /// row should reflect that without needing to close + reopen
+    /// Settings. On iOS we can't query the status, so this stays
+    /// `.eligibleButNotDefault` and the row is always visible.
+    @State var defaultBrowserStatus: DefaultBrowserStatus = .eligibleButNotDefault
+
     @Environment(\.dismiss) var dismiss
+    @Environment(\.scenePhase) var scenePhase
 
     var body: some View {
         // `@Bindable` projects two-way bindings off the @Observable settings
@@ -98,6 +107,40 @@ struct SettingsView : View {
                     .keyboardType(.URL)
                     #endif
                     .accessibilityIdentifier("field.customHomeURL")
+                }
+            }
+
+            // Cross-platform "Set as default browser" affordance.
+            // Android: RoleManager prompt on API 29+ (falls back to
+            // the system Default Apps screen on older releases).
+            // iOS: deep-link to the app's Settings entry, where
+            // iOS 14+ shows "Default Browser App" (subject to
+            // Apple's entitlement approval). The row is hidden only
+            // when we can prove Net-Skip already holds the role,
+            // which we can only do on Android; iOS shows it
+            // unconditionally because there's no isHeld API.
+            if defaultBrowserStatus != .held {
+                Section {
+                    Button {
+                        DefaultBrowser.requestRole()
+                    } label: {
+                        Label {
+                            Text("Set Net Skip as Default Browser", bundle: .module, comment: "settings row that takes the user to the system flow for making this app the default web browser")
+                        } icon: {
+                            Image("public", bundle: .module)
+                        }
+                    }
+                    .accessibilityIdentifier("button.setDefaultBrowser")
+                } footer: {
+                    #if SKIP
+                    if defaultBrowserStatus == .roleUnavailable {
+                        Text("Your device doesn't expose a Default Browser picker; you'll be taken to the system Default Apps settings.", bundle: .module, comment: "footer shown beneath the default-browser row on pre-Android-10 devices")
+                    } else {
+                        Text("Picking Net Skip as the default opens links from other apps in this browser.", bundle: .module, comment: "footer shown beneath the default-browser row when the role is available but not held")
+                    }
+                    #else
+                    Text("Opens Settings → Net Skip, where you can choose Net Skip under Default Browser App.", bundle: .module, comment: "footer shown beneath the default-browser row on iOS, explaining where the system Default Browser App row lives")
+                    #endif
                 }
             }
 
@@ -341,6 +384,20 @@ struct SettingsView : View {
                     }
                     .accessibilityIdentifier("link.about")
                 }
+            }
+        }
+        // Refresh the default-browser status when the sheet first
+        // appears AND again when the app is foregrounded — coming
+        // back from the Android RoleManager picker or the iOS
+        // Settings app should re-read the status (Android: real
+        // change; iOS: still .eligibleButNotDefault but the
+        // listener is cheap).
+        .onAppear {
+            defaultBrowserStatus = DefaultBrowser.currentStatus()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                defaultBrowserStatus = DefaultBrowser.currentStatus()
             }
         }
         .navigationTitle(Text("Settings", bundle: .module, comment: "settings sheet title"))
