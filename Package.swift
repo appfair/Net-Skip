@@ -19,7 +19,7 @@ let package = Package(
         .package(url: "https://source.skip.tools/skip-web.git", "0.0.0"..<"2.0.0"),
         .package(url: "https://source.skip.tools/skip-sql.git", "0.0.0"..<"2.0.0"),
         .package(url: "https://source.skip.tools/skip-script.git", "0.0.0"..<"2.0.0"),
-        .package(url: "https://source.skip.tools/skip-miniapp.git", branch: "main"),
+        .package(url: "https://github.com/Net-Skip/skip-miniapp.git", branch: "main"),
     ],
     targets: [
         .target(name: "NetSkip", dependencies: [
